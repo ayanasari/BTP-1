@@ -1,0 +1,13 @@
+{
+  "name": "sdsi-portal",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Data-entry portal for IIT Kharagpur SDSI sustainability data",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=22.13"
+  }
+}

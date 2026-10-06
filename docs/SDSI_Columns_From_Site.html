@@ -1,0 +1,155 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>SDSI Columns from Site Tables</title>
+<style>
+@page{size:A4;margin:16mm 15mm}
+body{font-family:"Segoe UI",Arial,sans-serif;font-size:10pt;color:#1f2933;line-height:1.4}
+h1{font-size:20pt;color:#14532d;margin:0 0 4pt}
+h2{font-size:14pt;background:#14532d;color:#fff;padding:4pt 8pt;margin:16pt 0 6pt;page-break-after:avoid}
+h3{font-size:11.5pt;color:#14532d;margin:12pt 0 3pt;page-break-after:avoid}
+p{margin:3pt 0}
+table{border-collapse:collapse;width:100%;margin:3pt 0 5pt;font-size:9.5pt}
+tr{page-break-inside:avoid}
+th{background:#e3f1e8;text-align:left}
+th,td{border:1px solid #c5d3c9;padding:3pt 6pt;vertical-align:top}
+.rep{margin:2pt 0 8pt;padding:5pt 9pt;background:#f3f8f4;border-left:4px solid #2f855a;page-break-inside:avoid}
+.rep b{color:#14532d}
+.rep ul{margin:2pt 0 0 14pt;padding:0}
+</style></head><body>
+<h1>SDSI Data Entry: Columns and Reports</h1>
+
+<h2>ENVIRONMENTAL SUSTAINABILITY</h2>
+
+<h3>1. Solid Waste Management</h3>
+<table><tr><th>Column</th><th>Unit</th></tr>
+<tr><td>Horticulture Waste</td><td>Tons</td></tr>
+<tr><td>Dry Waste</td><td>Tons</td></tr>
+<tr><td>Wet Waste</td><td>Tons</td></tr>
+<tr><td>Dry Waste Recycled</td><td>Tons</td></tr>
+<tr><td>Bio/Food Waste Processed</td><td>Tons</td></tr>
+<tr><td>Electronic Waste</td><td>Kg</td></tr>
+<tr><td>Wet Waste</td><td>kg/day</td></tr>
+<tr><td>Dry leaves</td><td>kg/day</td></tr>
+<tr><td>Cartons</td><td>kg/month</td></tr>
+<tr><td>Iron scrap</td><td>kg/month</td></tr>
+<tr><td>Plastics</td><td>kg/month</td></tr></table>
+<div class="rep"><b>Report adds:</b><ul>
+<li>Total Solid Waste, Tons</li>
+<li>Total recycled and reused waste, kg/day</li>
+<li>Total recycled and reused waste, kg/year</li>
+<li>Year-to-date totals</li>
+<li>Comparison with the previous financial year</li></ul></div>
+
+<h3>2. Sewage Treatment</h3>
+<p><b>Treatment plants</b></p>
+<table><tr><th>Column</th></tr>
+<tr><td>S. No.</td></tr><tr><td>Description</td></tr><tr><td>Year of commissioning</td></tr><tr><td>Capacity, Million litres per day</td></tr></table>
+<p><b>Sewage Treatment Plant data</b></p>
+<table><tr><th>Parameter</th><th>Unit</th><th>Inlet</th><th>Outlet</th><th>Regulatory limit, NGT 2018</th></tr>
+<tr><td>pH</td><td>-</td><td>enter</td><td>enter</td><td>5.5 to 9.0</td></tr>
+<tr><td>COD</td><td>mg/L</td><td>enter</td><td>enter</td><td>50</td></tr>
+<tr><td>BOD3 at 27 &deg;C</td><td>mg/L</td><td>enter</td><td>enter</td><td>10</td></tr>
+<tr><td>TSS</td><td>mg/L</td><td>enter</td><td>enter</td><td>20</td></tr></table>
+<div class="rep"><b>Report adds:</b><ul>
+<li>Total Capacity, Million litres per day</li>
+<li>Removal efficiency, % for COD, BOD3 and TSS</li>
+<li>Outlet within regulatory limit, yes or no</li>
+<li>Monthly trend of inlet and outlet values</li></ul></div>
+
+<h3>3. Solar PV Installations</h3>
+<table><tr><th>Category</th><th>Capacity, kWp</th></tr>
+<tr><td>Academic Buildings</td><td>enter</td></tr><tr><td>Hospital</td><td>enter</td></tr><tr><td>Car Parking</td><td>enter</td></tr><tr><td>Cycle Parking</td><td>enter</td></tr><tr><td>Student Dormitories</td><td>enter</td></tr><tr><td>Industrial Shed</td><td>enter</td></tr><tr><td>Recreational Area</td><td>enter</td></tr></table>
+<div class="rep"><b>Report adds:</b><ul>
+<li>Total Capacity, kWp</li>
+<li>Share of each category, %</li></ul></div>
+
+<h3>4. Emissions Control</h3>
+<p><b>Tree plantation</b></p>
+<table><tr><th>Column</th></tr>
+<tr><td>Sl. No.</td></tr><tr><td>Plantation Details</td></tr><tr><td>No. of Plants</td></tr></table>
+<p><b>CO<sub>2</sub> emissions from vehicles on campus</b>, one column per vehicle type: Cars Gasoline, Cars Diesel, Two wheelers, Buses, Food Truck, Ambulances</p>
+<table><tr><th>Parameter</th><th>Filled by</th></tr>
+<tr><td>Number registered in institute</td><td>enter</td></tr>
+<tr><td>Average distance travelled per day, km</td><td>enter</td></tr>
+<tr><td>Number of days vehicle runs per week</td><td>enter</td></tr>
+<tr><td>Fuel Used</td><td>enter</td></tr>
+<tr><td>Fuel consumption, km/L</td><td>enter</td></tr>
+<tr><td>CO<sub>2</sub> emission factor, kg CO<sub>2</sub>/L fuel consumed</td><td>enter</td></tr>
+<tr><td>Average distance travelled, km/y</td><td>calculated</td></tr>
+<tr><td>Average fuel consumption per year, L/y</td><td>calculated</td></tr>
+<tr><td>Total CO<sub>2</sub> emissions, kg CO<sub>2</sub>/y</td><td>calculated</td></tr></table>
+<p><b>CO<sub>2</sub> emissions from LPG cooking on campus</b>, one column each for Halls and Households</p>
+<table><tr><th>Parameter</th><th>Filled by</th></tr>
+<tr><td>Number of cylinders/y</td><td>enter</td></tr>
+<tr><td>Weight of gas, kg/cylinder</td><td>enter</td></tr>
+<tr><td>CO<sub>2</sub> emission factor, kg CO<sub>2</sub>/kg fuel consumed</td><td>enter</td></tr>
+<tr><td>Weight of gas, kg/y</td><td>calculated</td></tr>
+<tr><td>Total CO<sub>2</sub> emissions, kg/y</td><td>calculated</td></tr></table>
+<p><b>Carbon uptake by green areas</b>, one column per year</p>
+<table><tr><th>Description</th><th>Filled by</th></tr>
+<tr><td>Total Campus Area, in Acres</td><td>enter</td></tr>
+<tr><td>Total Green Area, in Acres</td><td>enter</td></tr>
+<tr><td>Carbon uptake, tCO<sub>2</sub>/acre-y</td><td>enter</td></tr>
+<tr><td>Green area, %</td><td>calculated</td></tr>
+<tr><td>Total carbon uptake, tCO<sub>2</sub>/y</td><td>calculated</td></tr>
+<tr><td>Scope 1 emissions, tCO<sub>2</sub>/y</td><td>calculated</td></tr>
+<tr><td>Excess carbon emissions, tCO<sub>2</sub>/y</td><td>calculated</td></tr></table>
+<div class="rep"><b>Report adds:</b><ul>
+<li>Total Vehicular CO<sub>2</sub> emissions, tCO<sub>2</sub>/y</li>
+<li>Total CO<sub>2</sub> emissions from LPG cooking, tCO<sub>2</sub>/y, for Halls, Households and combined</li>
+<li>Total Scope 1 emissions, tCO<sub>2</sub>/y</li>
+<li>Excess carbon emissions after green-area uptake, tCO<sub>2</sub>/y</li>
+<li>Total trees planted and trees planted per year</li>
+<li>Year-on-year change in green area and emissions</li></ul></div>
+
+<h2>SOCIAL RESPONSIBILITY</h2>
+
+<h3>5. Equality and Diversity</h3>
+<p><b>Reservation policy and tuition waiver</b></p>
+<table><tr><th>Column</th></tr>
+<tr><td>Undergraduate</td></tr><tr><td>Government of India reservation policy, %</td></tr><tr><td>Tuition waiver, %</td></tr></table>
+<p><b>Scholarships and fellowships</b></p>
+<table><tr><th>Column</th></tr>
+<tr><td>Description</td></tr><tr><td>Student category</td></tr><tr><td>Number of students</td></tr><tr><td>Amount of fellowship, &#8377;/month</td></tr></table>
+<p><b>Students as on 1 Apr 2025</b>, one column each for PG, RS and UG, values in %</p>
+<table><tr><th>Category</th></tr>
+<tr><td>ST</td></tr><tr><td>SC</td></tr><tr><td>OB</td></tr><tr><td>GE</td></tr><tr><td>FN</td></tr><tr><td>EWS</td></tr></table>
+<p><b>Students by category</b>, one column each for PG, RS and UG, values in %</p>
+<table><tr><th>Category</th></tr>
+<tr><td>% General</td></tr><tr><td>% OBC</td></tr><tr><td>% SC</td></tr><tr><td>% ST</td></tr><tr><td>% EWS</td></tr><tr><td>% FN</td></tr><tr><td>% PD</td></tr></table>
+<p><b>Students by gender</b>, one row each for PG, RS and UG</p>
+<table><tr><th>Column</th></tr><tr><td>F, %</td></tr><tr><td>M, %</td></tr></table>
+<p><b>Faculty and non-faculty by gender</b>, one row each for Faculty and Non faculty</p>
+<table><tr><th>Column</th></tr><tr><td>F, %</td></tr><tr><td>M, %</td></tr></table>
+<div class="rep"><b>Report adds:</b><ul>
+<li>Total students receiving scholarships, by year</li>
+<li>Year-on-year change for each scheme</li>
+<li>Total of each column, to confirm the percentages add up</li>
+<li>Female share of students, faculty and non-faculty</li></ul></div>
+
+<h3>6. Inclusivity</h3>
+<p><b>Sponsored research projects on disabilities studies</b></p>
+<table><tr><th>Column</th></tr>
+<tr><td>Title</td></tr><tr><td>Department</td></tr><tr><td>Project Duration</td></tr><tr><td>Principal Investigator(s)</td></tr></table>
+<div class="rep"><b>Report adds:</b><ul>
+<li>Number of projects, and number per department</li>
+<li>Projects running in the current year</li></ul></div>
+
+<h2>EDUCATION AND RESEARCH</h2>
+
+<h3>7. Environmental Education</h3>
+<table><tr><th>Column</th></tr>
+<tr><td>Serial No.</td></tr><tr><td>Degree offered</td></tr><tr><td>Program name</td></tr><tr><td>Department/Centre/School offering the degree</td></tr></table>
+<p><b>Sustainability events and courses</b></p>
+<table><tr><th>Column</th></tr>
+<tr><td>Sl. No.</td></tr><tr><td>Course ID</td></tr><tr><td>Course Title</td></tr><tr><td>Course Duration</td></tr><tr><td>Brief Course Outline</td></tr></table>
+<div class="rep"><b>Report adds:</b><ul>
+<li>Number of programmes, and number per department</li>
+<li>Number of events and courses per year</li>
+<li>Total days of course duration</li></ul></div>
+
+<h3>8. Environmental Research</h3>
+<table><tr><th>Column</th></tr>
+<tr><td>S. No.</td></tr><tr><td>Department</td></tr><tr><td>Year of establishment</td></tr><tr><td>Full-time/affiliated faculty</td></tr><tr><td>Full-time staff</td></tr><tr><td>PhD students</td></tr><tr><td>Masters students</td></tr><tr><td>Bachelors students</td></tr><tr><td>Domain areas</td></tr><tr><td>Link to website</td></tr></table>
+<div class="rep"><b>Report adds:</b><ul>
+<li>Total faculty, staff and students across all centres</li>
+<li>Students per faculty member for each centre</li></ul></div>
+</body></html>
