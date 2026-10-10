@@ -233,3 +233,55 @@ table.mini th { color: var(--muted); font-weight: 600; white-space: nowrap; }
   .main { padding: 18px 16px 48px; }
   h1 { font-size: 22px; }
 }
+
+/* ---------- sign-in ---------- */
+.login-body {
+  display: grid; place-items: center; min-height: 100vh; padding: 24px;
+  background: var(--bg);
+}
+.login-card {
+  width: 100%; max-width: 380px; padding: 28px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.login-head { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
+.login-head h1 { margin: 0; font-size: 18px; }
+.login-head p { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
+.login-card .field { margin-bottom: 14px; }
+.login-card label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 13px; }
+.login-card input {
+  width: 100%; padding: 10px 11px; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--surface);
+}
+.btn-block { width: 100%; justify-content: center; margin-top: 4px; }
+.login-help { margin: 18px 0 0; font-size: 12px; color: var(--muted); text-align: center; }
+
+/* ---------- who is signed in ---------- */
+.who { margin-left: auto; display: flex; align-items: center; gap: 14px; font-size: 13px; }
+.who-name { opacity: .9; }
+.who-link {
+  background: none; border: 0; padding: 0; cursor: pointer;
+  color: #fff; opacity: .85; text-decoration: underline; font-size: 13px;
+}
+.who-link:hover { opacity: 1; }
+@media (max-width: 560px) { .who-name { display: none; } }
+
+/* ---------- scoped entry ---------- */
+.scope-note { margin: -6px 0 14px; color: var(--muted); }
+.scope-note b { color: var(--text); }
+.fixed-value {
+  padding: 9px 11px; border: 1px dashed var(--border); border-radius: 8px;
+  background: var(--surface-2); color: var(--text);
+}
+.who-cell { color: var(--muted); font-size: 12px; }
+.tag {
+  display: inline-block; margin-left: 6px; padding: 1px 7px;
+  border-radius: 999px; font-size: 11px; font-weight: 600;
+}
+.tag.ok { background: var(--brand-soft); color: var(--brand-strong); }
+.tag.off { background: var(--danger-soft); color: var(--danger); }
+.new-pw { margin-bottom: 6px; font-size: 12px; color: var(--text); }
+.new-pw code {
+  padding: 2px 6px; border-radius: 6px;
+  background: var(--brand-soft); color: var(--brand-strong); font-weight: 600;
+}

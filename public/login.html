@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in · SDSI Data Entry</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="login-body">
+  <main class="login-card">
+    <div class="login-head">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <div>
+        <h1>SDSI Data Entry</h1>
+        <p>IIT Kharagpur · Sustainability</p>
+      </div>
+    </div>
+
+    <form id="loginForm" novalidate>
+      <div class="field">
+        <label for="username">Username</label>
+        <input id="username" name="username" autocomplete="username" autocapitalize="none"
+               spellcheck="false" required autofocus>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+      </div>
+      <p class="form-error" id="loginError" hidden></p>
+      <button type="submit" class="btn btn-primary btn-block" id="loginBtn">Sign in</button>
+    </form>
+
+    <p class="login-help">Forgotten your password? Ask the administrator to reset it for you.</p>
+  </main>
+
+  <script>
+    const form = document.getElementById('loginForm');
+    const err = document.getElementById('loginError');
+    const btn = document.getElementById('loginBtn');
+
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      err.hidden = true;
+      const username = form.username.value.trim();
+      const password = form.password.value;
+      if (!username || !password) {
+        err.textContent = 'Enter your username and password.';
+        err.hidden = false;
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = 'Signing in…';
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(json.error || 'Could not sign in.');
+        location.replace('/');
+      } catch (e2) {
+        err.textContent = e2.message;
+        err.hidden = false;
+        form.password.value = '';
+        form.password.focus();
+        btn.disabled = false;
+        btn.textContent = 'Sign in';
+      }
+    });
+  </script>
+</body>
+</html>

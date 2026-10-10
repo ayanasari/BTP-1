@@ -1,5 +1,5 @@
 (function () {
-  const { tables, categories, helpers } = window.SDSI;
+  const { tables, categories, overviews, helpers } = window.SDSI;
   const { fmt, fyOfMonth, formatPeriod, formatDate, inRange, isDated } = helpers;
 
   const $sidebar = document.getElementById('sidebar');
@@ -10,13 +10,32 @@
   const PERIOD_LABEL = { month: 'Month', fy: 'Financial year', year: 'Year', date: 'Date' };
   const openCats = new Set(loadOpenCats());
   let current = null; // { section, rows: {tableId: [...]}, editing: {tableId, id|null} }
+  let me = null;      // the signed-in account
+  let nav = [];       // categories and sections this account may open
 
   // ---------- utilities ----------
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const may = id => !!me && me.tables.includes(id);
+  // The tables of a section that this account may actually open.
+  const tablesOf = section => section.tables.filter(may);
   const findSection = id => {
-    for (const cat of categories) for (const s of cat.sections) if (s.id === id) return { cat, section: s };
+    for (const cat of nav) for (const s of cat.sections) if (s.id === id) return { cat, section: s };
     return null;
   };
+
+  // Categories and sections reduced to what the account is responsible for. A summary page
+  // needs every table it adds up, so it only appears for an account that has all of them.
+  function buildNav() {
+    return categories.map(cat => {
+      const sections = cat.sections
+        .filter(s => (s.overview ? s.tables.every(may) : s.tables.some(may)))
+        .map(s => ({ ...s, tables: s.overview ? s.tables : tablesOf(s) }));
+      return { ...cat, sections };
+    }).filter(cat => cat.sections.length);
+  }
+
+  // The scope field (hall, plant, facility) is fixed by the account, so it is shown but never asked.
+  const lockedField = t => (me && me.scope && t.scopeField) ? t.scopeField : null;
   function loadOpenCats() {
     try { return JSON.parse(localStorage.getItem('sdsi.openCats')) || []; } catch { return []; }
   }
@@ -44,6 +63,7 @@
     if (type === 'month') { d.setDate(1); d.setMonth(d.getMonth() - 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; }
     if (type === 'fy') { const [y] = currentFy().split('-').map(Number); return fyOfMonth(`${y - 1}-04`); }
     if (type === 'year') return String(d.getFullYear());
+    if (type === 'date') return toISO(new Date()); // daily entry starts on today
     return '';
   }
   function fyOptions() {
@@ -58,7 +78,7 @@
     const activeId = current?.section.id;
     $sidebar.innerHTML = `
       <a class="nav-home ${activeId ? '' : 'active'}" href="#/">Home</a>
-      ${categories.map(cat => `
+      ${nav.map(cat => `
         <div class="cat ${openCats.has(cat.id) ? 'open' : ''}" data-cat="${cat.id}">
           <button class="cat-btn" aria-expanded="${openCats.has(cat.id)}">
             <span>${esc(cat.title)}</span><span class="chev" aria-hidden="true">›</span>
@@ -90,14 +110,19 @@
   function renderHome() {
     current = null;
     document.title = 'SDSI Data Entry · IIT Kharagpur';
+    // One section and one table is the ordinary case for a worker: take them straight there.
+    const only = nav.length === 1 && nav[0].sections.length === 1 ? nav[0].sections[0] : null;
+    if (only) { location.replace(`#/s/${only.id}`); return; }
     $main.innerHTML = `
       <h1>Sustainability data entry</h1>
-      <p class="intro">Pick a category, then the section you are responsible for. Each section shows its tables, a form to add entries, and the figures calculated for the report.</p>
+      <p class="intro">${me && me.isAdmin
+        ? 'Every section of the portal, plus the monthly summary built from the daily entries.'
+        : 'These are the sections you are responsible for. Open one to add today’s entry.'}</p>
       <div class="cat-cards">
-        ${categories.map(cat => `
+        ${nav.map(cat => `
           <section class="cat-card">
             <h2>${esc(cat.title)}</h2>
-            <ul>${cat.sections.map(s => `<li><a href="#/s/${s.id}">${esc(s.title)} <span>${s.tables.length} table${s.tables.length > 1 ? 's' : ''} ›</span></a></li>`).join('')}</ul>
+            <ul>${cat.sections.map(s => `<li><a href="#/s/${s.id}">${esc(s.title)} <span>${s.overview ? 'summary' : `${s.tables.length} table${s.tables.length > 1 ? 's' : ''}`} ›</span></a></li>`).join('')}</ul>
           </section>`).join('')}
       </div>`;
     renderSidebar();
@@ -136,14 +161,42 @@
   function drawSection() {
     const { cat, section } = current;
     const ctx = ctxFor();
+    if (section.overview) return drawOverview(cat, section, ctx);
     const hasCalc = section.tables.some(id => tables[id].calcCols);
+    const scope = me && me.scope;
     $main.innerHTML = `
       <div class="crumbs"><a href="#/">Home</a> › ${esc(cat.title)}</div>
       <h1>${esc(section.title)}</h1>
+      ${scope && section.tables.some(id => tables[id].scopeField) ? `<p class="scope-note">Entries for <b>${esc(scope)}</b>.</p>` : ''}
       ${hasCalc ? `<div class="legend"><span><i style="background:var(--calc-bg);border:1px solid var(--border)"></i>Calculated automatically</span><span><i style="background:var(--danger-soft)"></i>Needs attention</span></div>` : ''}
       ${section.tables.map(id => tableCard(id, ctx)).join('')}`;
     bindSection();
     bindReportPanel();
+  }
+
+  // A read-only page: the published monthly figures, added up from the daily entries.
+  function miniTable(t) {
+    return `<div class="table-wrap"><table class="mini">
+      <thead><tr>${t.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead>
+      <tbody>${t.rows.map(r => `<tr>${r.map(v => `<td>${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody>
+    </table></div>`;
+  }
+
+  function drawOverview(cat, section, ctx) {
+    const o = overviews[section.overview](ctx);
+    $main.innerHTML = `
+      <div class="crumbs"><a href="#/">Home</a> › ${esc(cat.title)}</div>
+      <h1>${esc(section.title)}</h1>
+      <section class="card">
+        <div class="card-head"><h2>${esc(o.title)}</h2></div>
+        <p class="card-note">${esc(o.intro)}</p>
+        ${o.rows.length ? miniTable(o) : '<p class="empty">No entries yet, so there is nothing to add up.</p>'}
+      </section>
+      ${o.extra && o.extra.rows.length ? `
+        <section class="card">
+          <div class="card-head"><h2>${esc(o.extra.title)}</h2></div>
+          ${miniTable(o.extra)}
+        </section>` : ''}`;
   }
 
   // ---------- report panel ----------
@@ -322,11 +375,15 @@
   function rowsTable(tableId, rows, ctx) {
     const t = tables[tableId];
     const calcCols = t.calcCols || [];
+    const locked = lockedField(t);                  // same value on every row, so not worth a column
+    const fields = t.fields.filter(f => f.key !== locked);
+    const showWho = !!(me && me.isAdmin);
     const head = [
       t.serial ? `<th class="num">${esc(t.serial)}</th>` : '',
       t.period ? `<th>${esc(periodLabel(t))}</th>` : '',
-      ...t.fields.map(f => `<th class="${f.type === 'number' ? 'num' : ''}">${esc(f.label)}${f.unit ? `<span class="unit">${esc(f.unit)}</span>` : ''}</th>`),
+      ...fields.map(f => `<th class="${f.type === 'number' ? 'num' : ''}">${esc(f.label)}${f.unit ? `<span class="unit">${esc(f.unit)}</span>` : ''}</th>`),
       ...calcCols.map(c => `<th class="calc ${c.text ? '' : 'num'}">${esc(c.label)}${c.unit ? `<span class="unit">${esc(c.unit)}</span>` : ''}</th>`),
+      showWho ? '<th>Entered by</th>' : '',
       '<th><span class="sr-only"></span></th>',
     ].join('');
     const body = rows.map((r, i) => {
@@ -334,8 +391,10 @@
       return `<tr class="${c._flag ? 'flag' : ''}">
         ${t.serial ? `<td class="num">${i + 1}</td>` : ''}
         ${t.period ? `<td class="nowrap">${esc(formatPeriod(t.period, r.period))}</td>` : ''}
-        ${t.fields.map(f => { const x = cell(f, r.data[f.key]); return `<td class="${x.cls}">${x.html}</td>`; }).join('')}
+        ${fields.map(f => { const x = cell(f, r.data[f.key]); return `<td class="${x.cls}">${x.html}</td>`; }).join('')}
         ${calcCols.map(cc => cc.text ? `<td class="calc">${esc(c[cc.key] ?? '—')}</td>` : `<td class="calc num">${fmt(c[cc.key], cc.digits ?? 2)}</td>`).join('')}
+        ${showWho ? `<td class="nowrap who-cell">${esc(r.created_by || '—')}
+          ${r.verified ? '<span class="tag ok">checked</span>' : `<button class="btn-link" data-act="verify" data-id="${r.id}">Mark checked</button>`}</td>` : ''}
         <td class="actions">
           <button class="btn-link" data-act="edit" data-id="${r.id}">Edit</button>
           <button class="btn-link danger" data-act="delete" data-id="${r.id}">Delete</button>
@@ -385,12 +444,14 @@
 
   function formHtml(tableId, row) {
     const t = tables[tableId];
+    const locked = lockedField(t);
     return `
       <form class="entry-form" novalidate>
         <h3>${row ? 'Edit entry' : 'New entry'}</h3>
         <div class="form-grid">
           ${t.period ? `<div class="field"><label for="f___period">${esc(periodLabel(t))} <span class="req">*</span></label>${periodInputHtml(t, row ? row.period : null)}</div>` : ''}
-          ${t.fields.map(f => `
+          ${locked ? `<div class="field"><label>${esc(t.fields.find(f => f.key === locked).label)}</label><div class="fixed-value">${esc(me.scope)}</div></div>` : ''}
+          ${t.fields.filter(f => f.key !== locked).map(f => `
             <div class="field ${f.type === 'textarea' ? 'wide' : ''}">
               <label for="f_${f.key}">${esc(f.label)}${f.unit ? ` <span class="unit">(${esc(f.unit)})</span>` : ''}${f.required ? ' <span class="req">*</span>' : ''}</label>
               ${inputHtml(f, row ? row.data[f.key] : null)}
@@ -447,6 +508,16 @@
     if (act === 'add') { current.editing = { tableId, id: null }; redraw(tableId); }
     if (act === 'edit') { current.editing = { tableId, id: Number(btn.dataset.id) }; redraw(tableId); }
     if (act === 'cancel') { current.editing = null; redraw(tableId); }
+    if (act === 'verify') {
+      try {
+        const saved = await api('POST', `/api/entries/${btn.dataset.id}/verify`, { verified: true });
+        const list = current.rows[tableId] || [];
+        const i = list.findIndex(r => r.id === saved.id);
+        if (i >= 0) list[i] = saved;
+        redraw(tableId);
+      } catch (err) { toast(err.message); }
+      return;
+    }
     if (act === 'delete') {
       if (!window.confirm('Delete this entry? This cannot be undone.')) return;
       try {
@@ -500,13 +571,136 @@
     }
   }
 
+  // ---------- account page ----------
+  async function renderAccount() {
+    current = null;
+    document.title = 'Account · SDSI Data Entry';
+    renderSidebar();
+    $main.innerHTML = `
+      <div class="crumbs"><a href="#/">Home</a></div>
+      <h1>Account</h1>
+      <section class="card">
+        <div class="card-head"><h2>${esc(me.name)}<span class="count">${esc(me.username)}</span></h2></div>
+        <p class="card-note">${me.isAdmin ? 'Administrator — every section of the portal.'
+          : `You enter: ${esc(me.tables.map(id => tables[id].title).join(', '))}${me.scope ? ` · ${esc(me.scope)}` : ''}`}</p>
+        <form class="entry-form" id="pwForm" novalidate>
+          <h3>Change your password</h3>
+          <div class="form-grid">
+            <div class="field"><label for="f_current">Current password <span class="req">*</span></label>
+              <input type="password" id="f_current" name="current" autocomplete="current-password" required></div>
+            <div class="field"><label for="f_new">New password <span class="req">*</span></label>
+              <input type="password" id="f_new" name="password" autocomplete="new-password" minlength="8" required></div>
+            <div class="field"><label for="f_again">Repeat new password <span class="req">*</span></label>
+              <input type="password" id="f_again" name="again" autocomplete="new-password" required></div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Change password</button>
+            <span class="form-error" hidden></span>
+          </div>
+        </form>
+      </section>
+      ${me.isAdmin ? '<section class="card" id="usersCard"><div class="card-head"><h2>Accounts</h2></div><p class="empty">Loading…</p></section>' : ''}`;
+
+    const form = document.getElementById('pwForm');
+    const $err = form.querySelector('.form-error');
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      $err.hidden = true;
+      const fd = Object.fromEntries(new FormData(form));
+      if (String(fd.password).length < 8) { $err.textContent = 'Use at least 8 characters.'; $err.hidden = false; return; }
+      if (fd.password !== fd.again) { $err.textContent = 'The two new passwords are different.'; $err.hidden = false; return; }
+      try {
+        await api('POST', '/api/password', { current: fd.current, password: fd.password });
+        form.reset();
+        toast('Password changed');
+      } catch (err) { $err.textContent = err.message; $err.hidden = false; }
+    });
+
+    if (me.isAdmin) await renderUsers();
+  }
+
+  async function renderUsers() {
+    const card = document.getElementById('usersCard');
+    if (!card) return;
+    let list;
+    try { ({ users: list } = await api('GET', '/api/users')); }
+    catch (err) { card.querySelector('.empty').textContent = err.message; return; }
+    card.innerHTML = `
+      <div class="card-head"><h2>Accounts<span class="count">${list.length}</span></h2></div>
+      <p class="card-note">Resetting a password shows it once. Write it down and hand it over.</p>
+      <div class="table-wrap"><table class="data"><thead><tr>
+        <th>Username</th><th>Division</th><th>Enters</th><th>Status</th><th></th>
+      </tr></thead><tbody>
+        ${list.map(u => `<tr data-user="${u.id}">
+          <td class="nowrap"><b>${esc(u.username)}</b></td>
+          <td>${esc(u.name)}${u.scope ? `<br><span class="unit">${esc(u.scope)}</span>` : ''}</td>
+          <td class="long">${u.tables === '*' ? 'Everything' : esc(u.tables.map(id => tables[id] ? tables[id].title : id).join(', '))}</td>
+          <td class="nowrap">${u.active ? '<span class="tag ok">active</span>' : '<span class="tag off">switched off</span>'}</td>
+          <td class="actions nowrap">
+            <button class="btn-link" data-act="reset" data-id="${u.id}">Reset password</button>
+            ${u.username === 'admin' ? '' : `<button class="btn-link ${u.active ? 'danger' : ''}" data-act="active" data-id="${u.id}" data-to="${u.active ? '0' : '1'}">${u.active ? 'Switch off' : 'Switch on'}</button>`}
+          </td>
+        </tr>`).join('')}
+      </tbody></table></div>`;
+
+    if (card.dataset.bound) return;
+    card.dataset.bound = '1';
+    card.addEventListener('click', async e => {
+      const btn = e.target.closest('[data-act]');
+      if (!btn) return;
+      const id = Number(btn.dataset.id);
+      try {
+        if (btn.dataset.act === 'reset') {
+          if (!window.confirm('Reset this password? The person will be signed out everywhere.')) return;
+          const { password } = await api('POST', '/api/users', { userId: id, action: 'reset' });
+          const cell = btn.closest('td');
+          cell.insertAdjacentHTML('afterbegin', `<div class="new-pw">New password: <code>${esc(password)}</code></div>`);
+        } else if (btn.dataset.act === 'active') {
+          await api('POST', '/api/users', { userId: id, action: 'active', active: btn.dataset.to === '1' });
+          await renderUsers();
+        }
+      } catch (err) { toast(err.message); }
+    });
+  }
+
   // ---------- routing ----------
   function route() {
-    const m = location.hash.match(/^#\/s\/([\w-]+)/);
-    if (m) renderSectionPage(m[1]); else renderHome();
+    if (!me) return;
+    if (location.hash.startsWith('#/account')) { renderAccount(); }
+    else {
+      const m = location.hash.match(/^#\/s\/([\w-]+)/);
+      if (m) renderSectionPage(m[1]); else renderHome();
+    }
     $main.focus({ preventScroll: true });
     window.scrollTo(0, 0);
   }
-  window.addEventListener('hashchange', route);
-  route();
+
+  // ---------- start ----------
+  async function boot() {
+    try {
+      const res = await api('GET', '/api/me');
+      me = res.user;
+    } catch { me = null; }
+    if (!me) { location.replace('/login.html'); return; }
+
+    nav = buildNav();
+    const $who = document.getElementById('who');
+    document.getElementById('whoName').textContent = me.scope ? `${me.name}` : me.name;
+    $who.hidden = false;
+    document.getElementById('signOut').addEventListener('click', async () => {
+      try { await api('POST', '/api/logout'); } catch { /* sign out anyway */ }
+      location.replace('/login.html');
+    });
+
+    if (!nav.length) {
+      renderSidebar();
+      $main.innerHTML = `<h1>Nothing assigned yet</h1>
+        <p class="intro">This account has no sections to enter. Ask the administrator to assign one.</p>`;
+      return;
+    }
+    window.addEventListener('hashchange', route);
+    route();
+  }
+
+  boot();
 })();
