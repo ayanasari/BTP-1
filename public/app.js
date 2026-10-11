@@ -28,8 +28,11 @@
   function buildNav() {
     return categories.map(cat => {
       const sections = cat.sections
-        .filter(s => (s.overview ? s.tables.every(may) : s.tables.some(may)))
-        .map(s => ({ ...s, tables: s.overview ? s.tables : tablesOf(s) }));
+        .filter(s => {
+          if (s.adminOnly) return !!(me && me.isAdmin);
+          return s.overview ? s.tables.every(may) : s.tables.some(may);
+        })
+        .map(s => ({ ...s, tables: s.overview || s.recent ? s.tables : tablesOf(s) }));
       return { ...cat, sections };
     }).filter(cat => cat.sections.length);
   }
@@ -122,7 +125,11 @@
         ${nav.map(cat => `
           <section class="cat-card">
             <h2>${esc(cat.title)}</h2>
-            <ul>${cat.sections.map(s => `<li><a href="#/s/${s.id}">${esc(s.title)} <span>${s.overview ? 'summary' : `${s.tables.length} table${s.tables.length > 1 ? 's' : ''}`} ›</span></a></li>`).join('')}</ul>
+            <ul>${cat.sections.map(s => {
+              const note = s.recent ? 'everyone' : s.overview ? 'summary'
+                : `${s.tables.length} table${s.tables.length > 1 ? 's' : ''}`;
+              return `<li><a href="#/s/${s.id}">${esc(s.title)} <span>${note} ›</span></a></li>`;
+            }).join('')}</ul>
           </section>`).join('')}
       </div>`;
     renderSidebar();
@@ -139,11 +146,21 @@
     renderSidebar();
     document.title = `${section.title} · SDSI Data Entry`;
     $main.innerHTML = `<div class="crumbs"><a href="#/">Home</a> › ${esc(cat.title)}</div><h1>${esc(section.title)}</h1><p class="empty">Loading…</p>`;
+    if (section.recent) return drawRecent();
     try {
       current.rows = await api('GET', `/api/entries?tables=${section.tables.join(',')}`);
     } catch (err) {
       $main.querySelector('.empty').textContent = `Could not load data: ${err.message}`;
       return;
+    }
+    // A section that is one day's worth of typing opens with the form already up, so
+    // there is nothing to click before entering. Not if today is already filled in,
+    // which would only greet someone with a duplicate-entry error.
+    const only = section.tables.length === 1 ? section.tables[0] : null;
+    if (only && tables[only].period === 'date' && !section.overview) {
+      const today = toISO(new Date());
+      const doneToday = (current.rows[only] || []).some(r => r.period === today);
+      if (!doneToday) current.editing = { tableId: only, id: null };
     }
     drawSection();
   }
@@ -493,7 +510,10 @@
         });
         form.addEventListener('change', () => applyAutofill(form, t));
         form.addEventListener('submit', e => { e.preventDefault(); submitForm(form, tableId); });
-        const first = form.querySelector('input, select, textarea');
+        // Put the cursor in the first thing still to be filled in: the date and the hall
+        // are already right, so a worker types the number and presses Save.
+        const inputs = [...form.querySelectorAll('input, select, textarea')];
+        const first = inputs.find(el => !String(el.value).trim()) || inputs[0];
         if (first) first.focus();
       }
     });
@@ -661,6 +681,89 @@
         }
       } catch (err) { toast(err.message); }
     });
+  }
+
+  // ---------- recent entries, for the admin ----------
+  // Who entered what, across every section, newest first.
+  function entrySummary(t, row) {
+    const locked = t.scopeField;
+    const parts = [];
+    if (locked && row.data[locked]) parts.push(`<b>${esc(row.data[locked])}</b>`);
+    t.fields.forEach(f => {
+      if (f.key === locked) return;
+      const v = row.data[f.key];
+      if (v == null || v === '') return;
+      // f.plain marks a number that is not a quantity — a year takes no thousands separator.
+      const shown = (f.type === 'number' && !f.plain) ? fmt(v, 3) : String(v);
+      parts.push(`${esc(f.label)} ${esc(shown)}${f.unit ? ` ${esc(f.unit)}` : ''}`);
+    });
+    return parts.join(' · ');
+  }
+
+  const whenShort = iso => {
+    if (!iso) return '—';
+    const d = new Date(iso.includes('T') ? iso : iso.replace(' ', 'T') + 'Z');
+    if (isNaN(d)) return esc(iso);
+    const mins = Math.round((Date.now() - d) / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins} min ago`;
+    if (mins < 1440) return `${Math.round(mins / 60)} h ago`;
+    return formatDate(d.toISOString().slice(0, 10));
+  };
+
+  async function drawRecent(keepFilter) {
+    const onlyUnchecked = keepFilter != null ? keepFilter
+      : (current.recentUnchecked != null ? current.recentUnchecked : false);
+    current.recentUnchecked = onlyUnchecked;
+    const { cat, section } = current;
+    let data;
+    try {
+      data = await api('GET', `/api/recent?limit=150${onlyUnchecked ? '&unchecked=1' : ''}`);
+    } catch (err) {
+      $main.innerHTML = `<h1>${esc(section.title)}</h1><p class="empty">${esc(err.message)}</p>`;
+      return;
+    }
+    const rows = data.entries.filter(r => tables[r.table]);
+    $main.innerHTML = `
+      <div class="crumbs"><a href="#/">Home</a> › ${esc(cat.title)}</div>
+      <h1>${esc(section.title)}</h1>
+      <p class="intro">Everything entered across all nine divisions, newest first.</p>
+      <section class="card">
+        <div class="card-head">
+          <h2>${onlyUnchecked ? 'Waiting to be checked' : 'All entries'}<span class="count">${rows.length} shown</span></h2>
+          <div class="head-actions">
+            <button class="btn ${onlyUnchecked ? '' : 'btn-primary'}" data-recent="all">Everything</button>
+            <button class="btn ${onlyUnchecked ? 'btn-primary' : ''}" data-recent="unchecked">Waiting to be checked${data.waiting ? ` (${data.waiting})` : ''}</button>
+          </div>
+        </div>
+        ${rows.length ? `<div class="table-wrap"><table class="data"><thead><tr>
+          <th>Entered</th><th>By</th><th>Section</th><th>For</th><th>What</th><th>Checked</th>
+        </tr></thead><tbody>
+          ${rows.map(r => {
+            const t = tables[r.table];
+            return `<tr>
+              <td class="nowrap">${esc(whenShort(r.created_at))}</td>
+              <td class="nowrap"><b>${esc(r.created_by || '—')}</b></td>
+              <td class="nowrap">${esc(t.title)}</td>
+              <td class="nowrap">${t.period ? esc(formatPeriod(t.period, r.period)) : '—'}</td>
+              <td class="long">${entrySummary(t, r)}</td>
+              <td class="nowrap">${r.verified ? '<span class="tag ok">checked</span>'
+                : `<button class="btn-link" data-recent-verify="${r.id}">Mark checked</button>`}</td>
+            </tr>`;
+          }).join('')}
+        </tbody></table></div>`
+        : `<p class="empty">${onlyUnchecked ? 'Nothing is waiting to be checked.' : 'No entries yet.'}</p>`}
+      </section>`;
+
+    $main.querySelectorAll('[data-recent]').forEach(b =>
+      b.addEventListener('click', () => drawRecent(b.dataset.recent === 'unchecked')));
+    $main.querySelectorAll('[data-recent-verify]').forEach(b =>
+      b.addEventListener('click', async () => {
+        try {
+          await api('POST', `/api/entries/${b.dataset.recentVerify}/verify`, { verified: true });
+          drawRecent();
+        } catch (err) { toast(err.message); }
+      }));
   }
 
   // ---------- first sign-in ----------

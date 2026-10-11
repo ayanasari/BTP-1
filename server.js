@@ -288,6 +288,25 @@ async function handleApi(req, res, url, user, token) {
     }
   }
 
+  // Everything anyone has entered, newest first, in one list for the admin.
+  if (p === '/api/recent' && req.method === 'GET') {
+    if (!users.isAdmin(user)) throw new HttpError(403, 'Administrators only.');
+    const known = Object.keys(SDSI.tables);
+    const marks = known.map(() => '?').join(',');
+    const unchecked = url.searchParams.get('unchecked') === '1';
+    const limit = Math.min(Number(url.searchParams.get('limit')) || 100, 500);
+    // The figures loaded from the SDSI pages on first start are not anyone's entry,
+    // so they stay out of a list that answers "who has been entering what".
+    const rows = db.prepare(`SELECT * FROM entries WHERE table_id IN (${marks})
+      AND IFNULL(created_by, '') != 'published'
+      ${unchecked ? 'AND verified = 0' : ''}
+      ORDER BY datetime(created_at) DESC, id DESC LIMIT ?`).all(...known, limit);
+    const waiting = db.prepare(`SELECT COUNT(*) AS n FROM entries
+      WHERE table_id IN (${marks}) AND IFNULL(created_by, '') != 'published'
+      AND verified = 0`).get(...known).n;
+    return sendJson(res, 200, { entries: rows.map(rowOut), waiting });
+  }
+
   const idMatch = p.match(/^\/api\/entries\/(\d+)$/);
   const verifyMatch = p.match(/^\/api\/entries\/(\d+)\/verify$/);
 

@@ -37,8 +37,8 @@ const near = (base, spread) => Math.max(0, Math.round(base + (rnd() - 0.5) * spr
 const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const dayBack = n => { const d = new Date(); d.setDate(d.getDate() - n); return iso(d); };
 
-const insert = db.prepare(`INSERT INTO entries (table_id, period, data, created_by, verified)
-  VALUES (?, ?, ?, ?, ?)`);
+const insert = db.prepare(`INSERT INTO entries (table_id, period, data, created_by, verified, created_at, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?)`);
 const exists = db.prepare('SELECT 1 FROM entries WHERE table_id = ? AND period = ? AND data LIKE ?');
 
 let added = 0, skipped = 0;
@@ -47,7 +47,12 @@ function add(table, period, data, verified) {
   const scopeVal = data.hall || data.plant || data.facility || data.material;
   const like = scopeVal ? `%${scopeVal}%` : '%';
   if (exists.get(table, period, like)) { skipped++; return; }
-  insert.run(table, period, JSON.stringify(data), MARK, verified ? 1 : 0);
+  // Logged during the working day it belongs to, so the admin's list reads like real
+  // use rather than everything arriving at once.
+  const hh = String(9 + Math.floor(rnd() * 9)).padStart(2, '0');
+  const mm = String(Math.floor(rnd() * 60)).padStart(2, '0');
+  const at = `${period} ${hh}:${mm}:00`;
+  insert.run(table, period, JSON.stringify(data), MARK, verified ? 1 : 0, at, at);
   added++;
 }
 

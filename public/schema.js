@@ -445,6 +445,12 @@
         { id: 'stp-lab', title: 'Laboratory readings', tables: ['stp_lab'] },
       ],
     },
+    {
+      id: 'administration', title: 'Administration',
+      sections: [
+        { id: 'activity', title: 'Recent entries', recent: true, adminOnly: true, tables: [] },
+      ],
+    },
   ];
 
   const SDSI = {
