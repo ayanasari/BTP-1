@@ -65,14 +65,39 @@ There's nothing to install besides Node: no `npm install` and no internet needed
 
 On the first start the site creates the nine accounts with random passwords and writes them to
 **`data/initial-passwords.txt`**. Open that file, hand each person only their own line, and then
-delete it. Everyone can change their own password from the **Account** page, and the admin can
-reset anyone's from the same page.
+delete it.
+
+Those passwords work exactly once: the first time someone signs in, the site makes them choose a
+password of their own before anything else opens, and the handed-out one stops working. The admin
+can reset any account from the **Accounts** page, which hands out a new temporary password the
+same way.
+
+### What the sign-in does and doesn't allow
+
+- Nothing is served before sign-in — not a page, not the menu, not `schema.js`. Every address
+  lands on the sign-in page until there is a session.
+- Passwords are stored as salted scrypt hashes, never as text.
+- Five wrong passwords in a row lock that username for five minutes.
+- A session dies after **12 hours without use** and when the browser closes, so a machine left
+  signed in overnight is signed out by morning.
+- Pages are sent with `no-store`, so nothing stays in the browser's cache or back button after
+  sign-out.
 
 ### Running it for everyone
 
 Logins only do their job when the site runs on **one shared machine** — a campus server, or any
 computer that stays on — with everyone opening it at that machine's address. Each copy of the
 site keeps its own database, so a copy per laptop means a separate set of data per laptop.
+
+By default the site answers on every network connection, and the address to share is printed when
+it starts. To keep it to the one computer while you are testing:
+
+```
+HOST=127.0.0.1 node server.js
+```
+
+In Windows PowerShell that is `$env:HOST="127.0.0.1"; node server.js`. Behind an HTTPS proxy, set
+`HTTPS=1` so the session cookie is marked `Secure`.
 
 ### About the data
 

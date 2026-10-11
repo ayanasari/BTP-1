@@ -2,12 +2,16 @@
 // Run with `node server.js` (Node 22.13+), then open http://localhost:4000
 const http = require('node:http');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { DatabaseSync } = require('node:sqlite');
 const SDSI = require('./public/schema.js');
 const users = require('./users.js');
 
 const PORT = Number(process.env.PORT) || 4000;
+// All interfaces by default, so a campus machine serves everyone; HOST=127.0.0.1 to
+// keep it to the one computer.
+const HOST = process.env.HOST || '0.0.0.0';
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const DATA_DIR = path.join(__dirname, 'data');
 const COOKIE = 'sdsi_session';
@@ -184,7 +188,12 @@ function readBody(req) {
 }
 
 function sendJson(res, status, obj, headers = {}) {
-  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', ...headers });
+  res.writeHead(status, {
+    ...SECURITY_HEADERS,
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
+    ...headers,
+  });
   res.end(JSON.stringify(obj));
 }
 
@@ -197,8 +206,10 @@ function cookies(req) {
   return out;
 }
 
-const setCookie = (token, days) =>
-  `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${Math.round(days * 86400)}`;
+// No Max-Age: the cookie dies with the browser, and the server expires the session
+// itself after SESSION_IDLE_HOURS without use. Secure is added behind HTTPS.
+const setCookie = token =>
+  `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict${process.env.HTTPS === '1' ? '; Secure' : ''}`;
 
 // ---------- API ----------
 async function handleApi(req, res, url, user, token) {
@@ -206,10 +217,18 @@ async function handleApi(req, res, url, user, token) {
 
   if (p === '/api/login' && req.method === 'POST') {
     const body = await readBody(req);
-    const found = users.authenticate(db, body.username, body.password);
-    if (!found) throw new HttpError(401, 'Wrong username or password.');
+    const name = String(body.username || '').trim().toLowerCase();
+    const locked = users.lockedFor(name);
+    if (locked) {
+      throw new HttpError(429, `Too many wrong passwords. Try again in ${locked} minute${locked === 1 ? '' : 's'}.`);
+    }
+    const found = users.authenticate(db, name, body.password);
+    if (!found) {
+      users.noteFailure(name);
+      throw new HttpError(401, 'Wrong username or password.');
+    }
     const session = users.createSession(db, found.id);
-    return sendJson(res, 200, { user: publicUser(found) }, { 'Set-Cookie': setCookie(session.token, users.SESSION_DAYS) });
+    return sendJson(res, 200, { user: publicUser(found) }, { 'Set-Cookie': setCookie(session.token) });
   }
 
   if (p === '/api/logout' && req.method === 'POST') {
@@ -231,14 +250,22 @@ async function handleApi(req, res, url, user, token) {
       if (!users.authenticate(db, user.username, body.current)) throw new HttpError(403, 'Your current password is not right.');
     }
     const next = String(body.password || '');
-    if (next.length < 8) throw new HttpError(400, 'A password must be at least 8 characters.');
+    if (next.length < users.MIN_PASSWORD) {
+      throw new HttpError(400, `A password must be at least ${users.MIN_PASSWORD} characters.`);
+    }
+    if (next === body.current) throw new HttpError(400, 'Choose a password different from the current one.');
     if (!users.byId(db, targetId)) throw new HttpError(404, 'No such account.');
     users.setPassword(db, targetId, next);
     if (targetId === user.id) {
       const session = users.createSession(db, user.id); // keep this device signed in
-      return sendJson(res, 200, { ok: true }, { 'Set-Cookie': setCookie(session.token, users.SESSION_DAYS) });
+      return sendJson(res, 200, { ok: true }, { 'Set-Cookie': setCookie(session.token) });
     }
     return sendJson(res, 200, { ok: true });
+  }
+
+  // Until a handed-out password has been replaced, the account can do nothing else.
+  if (user.mustChange) {
+    throw new HttpError(403, 'Choose your own password before entering any data.');
   }
 
   if (p === '/api/users') {
@@ -249,9 +276,7 @@ async function handleApi(req, res, url, user, token) {
       const target = users.byId(db, Number(body.userId));
       if (!target) throw new HttpError(404, 'No such account.');
       if (body.action === 'reset') {
-        const password = users.makePassword();
-        users.setPassword(db, target.id, password);
-        return sendJson(res, 200, { password });
+        return sendJson(res, 200, { password: users.resetPassword(db, target.id) });
       }
       if (body.action === 'active') {
         if (target.username === 'admin') throw new HttpError(400, 'The administrator account cannot be switched off.');
@@ -321,7 +346,9 @@ function publicUser(user) {
   const allowed = user.tables === '*' ? Object.keys(SDSI.tables) : user.tables;
   return {
     username: user.username, name: user.name, role: user.role,
-    scope: user.scope, tables: allowed, isAdmin: user.role === 'admin',
+    scope: user.scope, tables: user.mustChange ? [] : allowed,
+    isAdmin: user.role === 'admin', mustChange: !!user.mustChange,
+    minPassword: users.MIN_PASSWORD,
   };
 }
 
@@ -329,20 +356,42 @@ function publicUser(user) {
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 
 function serveStatic(res, pathname) {
-  const file = path.normalize(path.join(PUBLIC_DIR, pathname === '/' ? 'index.html' : decodeURIComponent(pathname)));
-  if (!file.startsWith(PUBLIC_DIR)) { res.writeHead(403); return res.end(); }
+  let file;
+  try {
+    let rel = path.posix.normalize(decodeURIComponent(pathname));
+    if (rel.endsWith('/')) rel += 'index.html';
+    file = path.resolve(PUBLIC_DIR, '.' + rel);
+  } catch { res.writeHead(400); return res.end(); }
+  // path.resolve collapses "..", so anything outside public/ is refused. The separator
+  // matters: without it a sibling folder named "publicXYZ" would pass a prefix test.
+  if (file !== PUBLIC_DIR && !file.startsWith(PUBLIC_DIR + path.sep)) { res.writeHead(403); return res.end(); }
   fs.readFile(file, (err, buf) => {
     if (err) { res.writeHead(404, { 'Content-Type': 'text/plain' }); return res.end('Not found'); }
     res.writeHead(200, {
+      ...SECURITY_HEADERS,
       'Content-Type': (TYPES[path.extname(file)] || 'application/octet-stream') + '; charset=utf-8',
-      'Cache-Control': 'no-cache', // always revalidate so updated pages are picked up
+      // Nothing is kept on disk by the browser, so a signed-out machine has no pages
+      // left in its cache or its back button.
+      'Cache-Control': 'no-store, must-revalidate',
     });
     res.end(buf);
   });
 }
 
-// Pages anyone may fetch; everything else needs a session.
+// Files anyone may fetch before signing in: the sign-in page and what it needs to draw.
 const OPEN_PAGES = new Set(['/login.html', '/styles.css', '/favicon.ico']);
+
+const SECURITY_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'no-referrer',
+  // Everything the site runs ships with it; nothing is fetched from the internet.
+  'Content-Security-Policy': [
+    "default-src 'self'", "script-src 'self' 'unsafe-inline'", "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data:", "connect-src 'self'", "form-action 'self'",
+    "base-uri 'none'", "frame-ancestors 'none'", "object-src 'none'",
+  ].join('; '),
+};
 
 http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
@@ -351,8 +400,14 @@ http.createServer(async (req, res) => {
   try {
     if (url.pathname.startsWith('/api/')) return await handleApi(req, res, url, user, token);
     if (req.method !== 'GET') throw new HttpError(405, 'Method not allowed');
+    // Signed out, every address lands on the sign-in page; signed in, that page is
+    // pointless, so it bounces to the site.
     if (!user && !OPEN_PAGES.has(url.pathname)) {
-      res.writeHead(302, { Location: '/login.html' });
+      res.writeHead(302, { ...SECURITY_HEADERS, Location: '/login.html', 'Cache-Control': 'no-store' });
+      return res.end();
+    }
+    if (user && url.pathname === '/login.html') {
+      res.writeHead(302, { ...SECURITY_HEADERS, Location: '/', 'Cache-Control': 'no-store' });
       return res.end();
     }
     serveStatic(res, url.pathname);
@@ -361,4 +416,16 @@ http.createServer(async (req, res) => {
     if (status === 500) console.error(err);
     sendJson(res, status, { error: status === 500 ? 'Server error' : err.message });
   }
-}).listen(PORT, () => console.log(`SDSI portal running at http://localhost:${PORT}`));
+}).listen(PORT, HOST, () => {
+  console.log(`\n  SDSI portal running.`);
+  console.log(`  On this computer:  http://localhost:${PORT}`);
+  if (HOST === '0.0.0.0') {
+    const nets = Object.values(os.networkInterfaces()).flat()
+      .filter(n => n && n.family === 'IPv4' && !n.internal);
+    nets.forEach(n => console.log(`  On the network:    http://${n.address}:${PORT}`));
+    console.log(`\n  Anyone on this network can reach the sign-in page. To keep it to this`);
+    console.log(`  computer only, start it with:  HOST=127.0.0.1 node server.js\n`);
+  } else {
+    console.log(`  Reachable from this computer only.\n`);
+  }
+});

@@ -663,6 +663,49 @@
     });
   }
 
+  // ---------- first sign-in ----------
+  function renderFirstPassword() {
+    document.title = 'Choose your password · SDSI Data Entry';
+    $sidebar.innerHTML = '';
+    const min = me.minPassword || 8;
+    $main.innerHTML = `
+      <h1>Choose your own password</h1>
+      <p class="intro">You signed in with the password you were given. Pick one that only you
+        know, and the site will open. You will use it every day from now on.</p>
+      <section class="card" style="max-width:520px">
+        <div class="card-head"><h2>${esc(me.name)}<span class="count">${esc(me.username)}</span></h2></div>
+        <form class="entry-form" id="firstPw" novalidate>
+          <div class="form-grid">
+            <div class="field wide"><label for="f_current">The password you were given <span class="req">*</span></label>
+              <input type="password" id="f_current" name="current" autocomplete="current-password" required></div>
+            <div class="field wide"><label for="f_new">Your new password <span class="req">*</span>
+              <span class="unit">(at least ${min} characters)</span></label>
+              <input type="password" id="f_new" name="password" autocomplete="new-password" required></div>
+            <div class="field wide"><label for="f_again">Type it again <span class="req">*</span></label>
+              <input type="password" id="f_again" name="again" autocomplete="new-password" required></div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Save and open the site</button>
+            <span class="form-error" hidden></span>
+          </div>
+        </form>
+      </section>`;
+    const form = document.getElementById('firstPw');
+    const $err = form.querySelector('.form-error');
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      $err.hidden = true;
+      const fd = Object.fromEntries(new FormData(form));
+      if (String(fd.password).length < min) { $err.textContent = `Use at least ${min} characters.`; $err.hidden = false; return; }
+      if (fd.password !== fd.again) { $err.textContent = 'The two new passwords are different.'; $err.hidden = false; return; }
+      try {
+        await api('POST', '/api/password', { current: fd.current, password: fd.password });
+        location.reload();
+      } catch (err) { $err.textContent = err.message; $err.hidden = false; }
+    });
+    form.querySelector('input').focus();
+  }
+
   // ---------- routing ----------
   function route() {
     if (!me) return;
@@ -691,6 +734,9 @@
       try { await api('POST', '/api/logout'); } catch { /* sign out anyway */ }
       location.replace('/login.html');
     });
+
+    // A handed-out password gets replaced before anything else opens.
+    if (me.mustChange) { renderFirstPassword(); return; }
 
     if (!nav.length) {
       renderSidebar();
