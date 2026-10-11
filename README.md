@@ -81,6 +81,21 @@ password of their own before anything else opens, and the handed-out one stops w
 can reset any account from the **Accounts** page, which hands out a new temporary password the
 same way.
 
+### If someone forgets their password
+
+The admin resets anyone's from the **Accounts** page. If the **admin** password itself is lost,
+there is no way in through the website — so recovery runs from the machine holding the database:
+
+```
+node reset-password.js                      list the accounts
+node reset-password.js admin                give it a new random password
+node reset-password.js admin my-new-pass    or choose one yourself
+```
+
+It prints the new password once, signs that account out everywhere, and makes them choose their
+own at the next sign-in. Anyone who can run commands on that machine can do this, which is the
+point — keep the machine itself locked.
+
 ### What the sign-in does and doesn't allow
 
 - Nothing is served before sign-in — not a page, not the menu, not `schema.js`. Every address
@@ -146,7 +161,9 @@ In Windows PowerShell that is `$env:HOST="127.0.0.1"; node server.js`. Behind an
 - `public/schema.js`: every category, section, table, column, calculation and monthly rollup. Add or change sections here.
 - `users.js`: the nine divisions and their email addresses, password hashing, sessions and permissions.
 - `demo-data.js`: fills the site with a month of example figures for a demonstration, and clears them again.
+- `reset-password.js`: sets a new password for one account from this computer, for when one is lost.
 - `start.bat`: double-click starter for Windows.
+- `share.bat`: starts the site and opens a public web address through Cloudflare, for showing people.
 - `server.js`: serves the pages and stores entries in SQLite (the built-in `node:sqlite`), checking
   every request against `schema.js` and against what the signed-in account is allowed to touch.
 - `seed.js`: the published list of treatment plants, loaded on first start.
