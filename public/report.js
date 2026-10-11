@@ -113,9 +113,10 @@
       doc.setTextColor(...MUTED);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8.5);
+      const plural = n => `${n} entr${n === 1 ? 'y' : 'ies'}`;
       const scope = !isDated(t)
-        ? `Current list, not filtered by date: ${all.length} entr${all.length === 1 ? 'y' : 'ies'}`
-        : from ? `${selected.length} of ${all.length} entries fall in this period` : `${all.length} entries`;
+        ? `Current list, not filtered by date: ${plural(all.length)}`
+        : from ? `${selected.length} of ${plural(all.length)} fall in this period` : plural(all.length);
       doc.text(pdfText(t.note ? `${scope}. ${t.note}` : scope), M, y);
       y += 3;
 

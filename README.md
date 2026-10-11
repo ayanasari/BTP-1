@@ -46,8 +46,11 @@ node --version
 git clone https://github.com/ayanasari/BTP-1.git
 ```
 
-**3. Start the server.** Go into the folder and run it. Use `cd BTP-1-main` instead if you
-downloaded the ZIP.
+**3. Start the server.** On Windows, double-click **`start.bat`** in the project folder. It
+checks that Node is installed and new enough, then starts the site and tells you what to do if
+anything is missing.
+
+Or from a terminal:
 
 ```
 cd BTP-1
