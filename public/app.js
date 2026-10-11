@@ -580,7 +580,7 @@
       <div class="crumbs"><a href="#/">Home</a></div>
       <h1>Account</h1>
       <section class="card">
-        <div class="card-head"><h2>${esc(me.name)}<span class="count">${esc(me.username)}</span></h2></div>
+        <div class="card-head"><h2>${esc(me.name)}<span class="count">${esc(me.email || me.username)}</span></h2></div>
         <p class="card-note">${me.isAdmin ? 'Administrator — every section of the portal.'
           : `You enter: ${esc(me.tables.map(id => tables[id].title).join(', '))}${me.scope ? ` · ${esc(me.scope)}` : ''}`}</p>
         <form class="entry-form" id="pwForm" novalidate>
@@ -629,10 +629,10 @@
       <div class="card-head"><h2>Accounts<span class="count">${list.length}</span></h2></div>
       <p class="card-note">Resetting a password shows it once. Write it down and hand it over.</p>
       <div class="table-wrap"><table class="data"><thead><tr>
-        <th>Username</th><th>Division</th><th>Enters</th><th>Status</th><th></th>
+        <th>Signs in with</th><th>Division</th><th>Enters</th><th>Status</th><th></th>
       </tr></thead><tbody>
         ${list.map(u => `<tr data-user="${u.id}">
-          <td class="nowrap"><b>${esc(u.username)}</b></td>
+          <td class="nowrap"><b>${esc(u.email || u.username)}</b><br><span class="unit">or ${esc(u.username)}</span></td>
           <td>${esc(u.name)}${u.scope ? `<br><span class="unit">${esc(u.scope)}</span>` : ''}</td>
           <td class="long">${u.tables === '*' ? 'Everything' : esc(u.tables.map(id => tables[id] ? tables[id].title : id).join(', '))}</td>
           <td class="nowrap">${u.active ? '<span class="tag ok">active</span>' : '<span class="tag off">switched off</span>'}</td>

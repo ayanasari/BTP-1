@@ -13,17 +13,23 @@ A website for entering and reporting IIT Kharagpur sustainability (SDSI) data. I
 
 ## The nine accounts
 
-| Username | Enters | How often |
-| --- | --- | --- |
-| `admin` | everything, plus the monthly summary and the account list | as needed |
-| `mess_azad` | food waste, Azad Hall | daily |
-| `mess_patel` | food waste, Patel Hall | daily |
-| `mess_nehru` | food waste, Nehru Hall | daily |
-| `mess_rk` | food waste, RK Hall | daily |
-| `sanitation` | dry waste total, recyclables sold, e-waste handed over | daily / per lot / per event |
-| `horticulture` | dry leaves and garden waste, composted on site | daily |
-| `processing` | organic waste received and compost or gas produced | daily |
-| `stp` | daily plant log and laboratory readings, for all 7 plants | daily / per report |
+People sign in with **either their email or the short username** — whichever they find easier
+to type.
+
+| Signs in with | Or | Enters | How often |
+| --- | --- | --- | --- |
+| sdsi.admin@iitkgp.ac.in | `admin` | everything, plus the monthly summary and the account list | as needed |
+| azad.mess@iitkgp.ac.in | `mess_azad` | food waste, Azad Hall | daily |
+| patel.mess@iitkgp.ac.in | `mess_patel` | food waste, Patel Hall | daily |
+| nehru.mess@iitkgp.ac.in | `mess_nehru` | food waste, Nehru Hall | daily |
+| rk.mess@iitkgp.ac.in | `mess_rk` | food waste, RK Hall | daily |
+| sanitation@iitkgp.ac.in | `sanitation` | dry waste total, recyclables sold, e-waste handed over | daily / per lot / per event |
+| horticulture@iitkgp.ac.in | `horticulture` | dry leaves and garden waste, composted on site | daily |
+| biogas@iitkgp.ac.in | `processing` | organic waste received and compost or gas produced | daily |
+| stp@iitkgp.ac.in | `stp` | daily plant log and laboratory readings, for all 7 plants | daily / per report |
+
+**The addresses above are placeholders.** Change them to the real ones in the `DIVISIONS` list at
+the top of `users.js` and restart; the new address is picked up without disturbing anything else.
 
 A mess manager's whole screen is: today's date, one number, Save.
 
@@ -86,6 +92,29 @@ same way.
 - Pages are sent with `no-store`, so nothing stays in the browser's cache or back button after
   sign-out.
 
+### Showing it to someone
+
+An empty site demonstrates badly: monthly totals and reports need history behind them. Fill it
+with about a month of plausible figures:
+
+```
+node demo-data.js
+```
+
+It stops at yesterday, so today is empty and every account has something to enter live. The last
+week is left unchecked, so the admin has rows to verify. Afterwards:
+
+```
+node demo-data.js --clear
+```
+
+removes only what the script added — anything a real account typed stays. `node demo-data.js 60`
+fills sixty days instead of thirty.
+
+Before the demonstration, sign in once as each account you plan to show and set a password you
+can type in front of people: the random ones are deliberately awkward, and the site makes you
+change them on first sign-in anyway.
+
 ### Running it for everyone
 
 Logins only do their job when the site runs on **one shared machine** — a campus server, or any
@@ -115,7 +144,9 @@ In Windows PowerShell that is `$env:HOST="127.0.0.1"; node server.js`. Behind an
 ## Files
 
 - `public/schema.js`: every category, section, table, column, calculation and monthly rollup. Add or change sections here.
-- `users.js`: the nine divisions, password hashing, sessions and permissions.
+- `users.js`: the nine divisions and their email addresses, password hashing, sessions and permissions.
+- `demo-data.js`: fills the site with a month of example figures for a demonstration, and clears them again.
+- `start.bat`: double-click starter for Windows.
 - `server.js`: serves the pages and stores entries in SQLite (the built-in `node:sqlite`), checking
   every request against `schema.js` and against what the signed-in account is allowed to touch.
 - `seed.js`: the published list of treatment plants, loaded on first start.

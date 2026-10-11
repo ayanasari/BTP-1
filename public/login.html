@@ -18,9 +18,10 @@
 
     <form id="loginForm" novalidate>
       <div class="field">
-        <label for="username">Username</label>
+        <label for="username">Email or username</label>
         <input id="username" name="username" autocomplete="username" autocapitalize="none"
-               spellcheck="false" required autofocus>
+               spellcheck="false" inputmode="email" required autofocus
+               placeholder="azad.mess@iitkgp.ac.in">
       </div>
       <div class="field">
         <label for="password">Password</label>
@@ -44,7 +45,7 @@
       const username = form.username.value.trim();
       const password = form.password.value;
       if (!username || !password) {
-        err.textContent = 'Enter your username and password.';
+        err.textContent = 'Enter your email and password.';
         err.hidden = false;
         return;
       }

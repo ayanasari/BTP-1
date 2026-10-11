@@ -345,7 +345,7 @@ async function handleApi(req, res, url, user, token) {
 function publicUser(user) {
   const allowed = user.tables === '*' ? Object.keys(SDSI.tables) : user.tables;
   return {
-    username: user.username, name: user.name, role: user.role,
+    username: user.username, email: user.email, name: user.name, role: user.role,
     scope: user.scope, tables: user.mustChange ? [] : allowed,
     isAdmin: user.role === 'admin', mustChange: !!user.mustChange,
     minPassword: users.MIN_PASSWORD,

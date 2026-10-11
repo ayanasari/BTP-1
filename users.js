@@ -6,21 +6,25 @@ const path = require('node:path');
 
 // The nine divisions. `tables` is what the account may see and edit; '*' means everything.
 // `scope` locks the account to one value of the table's scopeField (the hall, for a mess).
+//
+// CHANGE THE EMAIL ADDRESSES to the real ones before anyone uses this. People sign in with
+// either the email or the short username, whichever they find easier to type. An address
+// changed here is picked up the next time the server starts.
 const DIVISIONS = [
-  { username: 'admin', name: 'Administrator', role: 'admin', scope: null, tables: '*' },
+  { username: 'admin', email: 'sdsi.admin@iitkgp.ac.in', name: 'Administrator', role: 'admin', scope: null, tables: '*' },
 
-  { username: 'mess_azad', name: 'Azad Hall mess', role: 'staff', scope: 'Azad Hall', tables: ['mess_waste'] },
-  { username: 'mess_patel', name: 'Patel Hall mess', role: 'staff', scope: 'Patel Hall', tables: ['mess_waste'] },
-  { username: 'mess_nehru', name: 'Nehru Hall mess', role: 'staff', scope: 'Nehru Hall', tables: ['mess_waste'] },
-  { username: 'mess_rk', name: 'RK Hall mess', role: 'staff', scope: 'RK Hall', tables: ['mess_waste'] },
+  { username: 'mess_azad', email: 'azad.mess@iitkgp.ac.in', name: 'Azad Hall mess', role: 'staff', scope: 'Azad Hall', tables: ['mess_waste'] },
+  { username: 'mess_patel', email: 'patel.mess@iitkgp.ac.in', name: 'Patel Hall mess', role: 'staff', scope: 'Patel Hall', tables: ['mess_waste'] },
+  { username: 'mess_nehru', email: 'nehru.mess@iitkgp.ac.in', name: 'Nehru Hall mess', role: 'staff', scope: 'Nehru Hall', tables: ['mess_waste'] },
+  { username: 'mess_rk', email: 'rk.mess@iitkgp.ac.in', name: 'RK Hall mess', role: 'staff', scope: 'RK Hall', tables: ['mess_waste'] },
 
-  { username: 'sanitation', name: 'Sanitation Section', role: 'staff', scope: null,
+  { username: 'sanitation', email: 'sanitation@iitkgp.ac.in', name: 'Sanitation Section', role: 'staff', scope: null,
     tables: ['dry_waste', 'recyclables_sold', 'ewaste_disposal'] },
-  { username: 'horticulture', name: 'Horticulture Section', role: 'staff', scope: null,
+  { username: 'horticulture', email: 'horticulture@iitkgp.ac.in', name: 'Horticulture Section', role: 'staff', scope: null,
     tables: ['horticulture_waste'] },
-  { username: 'processing', name: 'Organic waste processing', role: 'staff', scope: null,
+  { username: 'processing', email: 'biogas@iitkgp.ac.in', name: 'Organic waste processing', role: 'staff', scope: null,
     tables: ['waste_processed'] },
-  { username: 'stp', name: 'Sewage treatment', role: 'staff', scope: null,
+  { username: 'stp', email: 'stp@iitkgp.ac.in', name: 'Sewage treatment', role: 'staff', scope: null,
     tables: ['stp_daily', 'stp_lab'] },
 ];
 
@@ -80,6 +84,8 @@ function init(db) {
   // Handed-out passwords must be replaced by one only that person knows.
   const cols = new Set(db.prepare(`PRAGMA table_info(users)`).all().map(c => c.name));
   if (!cols.has('must_change')) db.exec(`ALTER TABLE users ADD COLUMN must_change INTEGER NOT NULL DEFAULT 0`);
+  if (!cols.has('email')) db.exec(`ALTER TABLE users ADD COLUMN email TEXT`);
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL`);
 }
 
 // Create any division that doesn't exist yet, with a fresh password, and write the
@@ -87,15 +93,19 @@ function init(db) {
 function ensureDivisions(db, dataDir) {
   const existing = new Set(db.prepare('SELECT username FROM users').all().map(r => r.username));
   const created = [];
-  const insert = db.prepare(`INSERT INTO users (username, name, role, scope, tables_json, pw_salt, pw_hash, must_change)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 1)`);
+  const insert = db.prepare(`INSERT INTO users (username, email, name, role, scope, tables_json, pw_salt, pw_hash, must_change)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`);
   for (const d of DIVISIONS) {
     if (existing.has(d.username)) continue;
     const password = makePassword();
     const { salt, hash } = hashPassword(password);
-    insert.run(d.username, d.name, d.role, d.scope, JSON.stringify(d.tables), salt, hash);
+    insert.run(d.username, d.email || null, d.name, d.role, d.scope, JSON.stringify(d.tables), salt, hash);
     created.push({ ...d, password });
   }
+  // An address edited in DIVISIONS takes effect on the next start, without touching anything else.
+  const setEmail = db.prepare(`UPDATE users SET email = ? WHERE username = ? AND IFNULL(email, '') != IFNULL(?, '')`);
+  DIVISIONS.forEach(d => setEmail.run(d.email || null, d.username, d.email || null));
+
   if (!created.length) return [];
 
   const file = path.join(dataDir, 'initial-passwords.txt');
@@ -107,7 +117,9 @@ function ensureDivisions(db, dataDir) {
     'password the first time they sign in, so these stop working straight away.',
     'Delete this file once the passwords have been handed out.',
     '',
-    ...created.map(c => `${c.username.padEnd(14)} ${c.password.padEnd(22)} ${c.name}`),
+    'Either the email or the short name below works as the sign-in.',
+    '',
+    ...created.map(c => `${(c.email || '—').padEnd(28)} ${c.username.padEnd(14)} ${c.password.padEnd(22)} ${c.name}`),
     '',
   ].join('\n');
   fs.writeFileSync(file, lines, { mode: 0o600 });
@@ -119,13 +131,15 @@ function ensureDivisions(db, dataDir) {
 function shape(row) {
   if (!row) return null;
   return {
-    id: row.id, username: row.username, name: row.name, role: row.role,
+    id: row.id, username: row.username, email: row.email || null, name: row.name, role: row.role,
     scope: row.scope || null, tables: JSON.parse(row.tables_json), active: !!row.active,
     mustChange: !!row.must_change,
   };
 }
 
-const byName = (db, username) => db.prepare('SELECT * FROM users WHERE username = ?').get(String(username || '').trim().toLowerCase());
+// People sign in with whichever they remember: the email or the short name.
+const byName = (db, login) => db.prepare('SELECT * FROM users WHERE username = ? OR email = ?')
+  .get(String(login || '').trim().toLowerCase(), String(login || '').trim().toLowerCase());
 const byId = (db, id) => db.prepare('SELECT * FROM users WHERE id = ?').get(id);
 const list = db => db.prepare('SELECT * FROM users ORDER BY role DESC, username').all().map(shape);
 
