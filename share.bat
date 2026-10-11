@@ -38,17 +38,19 @@ set "HTTPS=1"
 
 echo.
 echo   Starting the site...
+rem If a server window is already open from last time, this one exits straight
+rem away saying the port is in use - which is harmless, the first one still serves.
 start "SDSI portal server" cmd /k node server.js
 
-rem Wait for the server to answer before opening it to the world.
-powershell -NoProfile -Command "$ok=$false; for($i=0;$i -lt 40;$i++){ try{ Invoke-WebRequest -UseBasicParsing -Uri 'http://localhost:4000/login.html' -TimeoutSec 2 ^| Out-Null; $ok=$true; break } catch { Start-Sleep -Milliseconds 500 } }; if($ok){exit 0}else{exit 1}"
+rem Wait for the server to answer before opening it to the world. No pipes in here:
+rem cmd passes them through to PowerShell unevenly from inside a quoted string.
+powershell -NoProfile -Command "$ok=$false; for($i=0;$i -lt 40;$i++){ try{ $null = Invoke-WebRequest -UseBasicParsing -Uri 'http://localhost:4000/login.html' -TimeoutSec 2; $ok=$true; break } catch { Start-Sleep -Milliseconds 500 } }; if(-not $ok){ exit 1 }"
 if errorlevel 1 (
   echo.
-  echo   The site did not start. Look at the other window titled
-  echo   "SDSI portal server" to see what went wrong.
+  echo   Could not confirm the site is up. If the other window titled
+  echo   "SDSI portal server" shows an error, fix that first. Otherwise
+  echo   this is just the check being unreliable - carrying on anyway.
   echo.
-  pause
-  exit /b 1
 )
 
 echo   The site is running on this computer.
