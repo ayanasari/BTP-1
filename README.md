@@ -116,8 +116,8 @@ with about a month of plausible figures:
 node demo-data.js
 ```
 
-It stops at yesterday, so today is empty and every account has something to enter live. The last
-week is left unchecked, so the admin has rows to verify. Afterwards:
+It stops at yesterday, so today is empty and every account has something to enter live.
+Afterwards:
 
 ```
 node demo-data.js --clear
@@ -151,7 +151,10 @@ In Windows PowerShell that is `$env:HOST="127.0.0.1"; node server.js`. Behind an
 - On the first start the site creates `data/sdsi.db` and loads the published list of treatment plants.
 - The database isn't uploaded to GitHub. Keep a copy of `data/sdsi.db` if you enter data you care about.
 - To start again from scratch, stop the server and delete the `data` folder. New passwords are then generated.
-- Entries made by a staff account start as unchecked. The admin sees who entered each row and can mark it checked.
+- **Nothing waits for approval.** Eight divisions entering daily is a few hundred rows a month,
+  and an administrator asked to approve every one would simply rubber-stamp them. Instead
+  **Administration → Recent entries** shows everything that has come in, newest first, with who
+  entered it and when. Anything wrong can be opened in its section and corrected, or deleted.
 - Upgrading from the earlier version of the portal: rows belonging to the retired categories
   (energy, emissions, education, equality and so on) are moved into an `archived_entries` table
   rather than deleted.

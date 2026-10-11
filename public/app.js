@@ -410,8 +410,7 @@
         ${t.period ? `<td class="nowrap">${esc(formatPeriod(t.period, r.period))}</td>` : ''}
         ${fields.map(f => { const x = cell(f, r.data[f.key]); return `<td class="${x.cls}">${x.html}</td>`; }).join('')}
         ${calcCols.map(cc => cc.text ? `<td class="calc">${esc(c[cc.key] ?? '—')}</td>` : `<td class="calc num">${fmt(c[cc.key], cc.digits ?? 2)}</td>`).join('')}
-        ${showWho ? `<td class="nowrap who-cell">${esc(r.created_by || '—')}
-          ${r.verified ? '<span class="tag ok">checked</span>' : `<button class="btn-link" data-act="verify" data-id="${r.id}">Mark checked</button>`}</td>` : ''}
+        ${showWho ? `<td class="nowrap who-cell">${esc(r.created_by || '—')}</td>` : ''}
         <td class="actions">
           <button class="btn-link" data-act="edit" data-id="${r.id}">Edit</button>
           <button class="btn-link danger" data-act="delete" data-id="${r.id}">Delete</button>
@@ -528,16 +527,6 @@
     if (act === 'add') { current.editing = { tableId, id: null }; redraw(tableId); }
     if (act === 'edit') { current.editing = { tableId, id: Number(btn.dataset.id) }; redraw(tableId); }
     if (act === 'cancel') { current.editing = null; redraw(tableId); }
-    if (act === 'verify') {
-      try {
-        const saved = await api('POST', `/api/entries/${btn.dataset.id}/verify`, { verified: true });
-        const list = current.rows[tableId] || [];
-        const i = list.findIndex(r => r.id === saved.id);
-        if (i >= 0) list[i] = saved;
-        redraw(tableId);
-      } catch (err) { toast(err.message); }
-      return;
-    }
     if (act === 'delete') {
       if (!window.confirm('Delete this entry? This cannot be undone.')) return;
       try {
@@ -711,14 +700,11 @@
     return formatDate(d.toISOString().slice(0, 10));
   };
 
-  async function drawRecent(keepFilter) {
-    const onlyUnchecked = keepFilter != null ? keepFilter
-      : (current.recentUnchecked != null ? current.recentUnchecked : false);
-    current.recentUnchecked = onlyUnchecked;
+  async function drawRecent() {
     const { cat, section } = current;
     let data;
     try {
-      data = await api('GET', `/api/recent?limit=150${onlyUnchecked ? '&unchecked=1' : ''}`);
+      data = await api('GET', '/api/recent?limit=150');
     } catch (err) {
       $main.innerHTML = `<h1>${esc(section.title)}</h1><p class="empty">${esc(err.message)}</p>`;
       return;
@@ -727,17 +713,12 @@
     $main.innerHTML = `
       <div class="crumbs"><a href="#/">Home</a> › ${esc(cat.title)}</div>
       <h1>${esc(section.title)}</h1>
-      <p class="intro">Everything entered across all nine divisions, newest first.</p>
+      <p class="intro">Everything entered across all nine divisions, newest first. Nothing here
+        needs approving — it is a record of what came in, and anything wrong can be removed.</p>
       <section class="card">
-        <div class="card-head">
-          <h2>${onlyUnchecked ? 'Waiting to be checked' : 'All entries'}<span class="count">${rows.length} shown</span></h2>
-          <div class="head-actions">
-            <button class="btn ${onlyUnchecked ? '' : 'btn-primary'}" data-recent="all">Everything</button>
-            <button class="btn ${onlyUnchecked ? 'btn-primary' : ''}" data-recent="unchecked">Waiting to be checked${data.waiting ? ` (${data.waiting})` : ''}</button>
-          </div>
-        </div>
+        <div class="card-head"><h2>All entries<span class="count">${rows.length} shown</span></h2></div>
         ${rows.length ? `<div class="table-wrap"><table class="data"><thead><tr>
-          <th>Entered</th><th>By</th><th>Section</th><th>For</th><th>What</th><th>Checked</th>
+          <th>Entered</th><th>By</th><th>Section</th><th>For</th><th>What</th><th></th>
         </tr></thead><tbody>
           ${rows.map(r => {
             const t = tables[r.table];
@@ -747,23 +728,33 @@
               <td class="nowrap">${esc(t.title)}</td>
               <td class="nowrap">${t.period ? esc(formatPeriod(t.period, r.period)) : '—'}</td>
               <td class="long">${entrySummary(t, r)}</td>
-              <td class="nowrap">${r.verified ? '<span class="tag ok">checked</span>'
-                : `<button class="btn-link" data-recent-verify="${r.id}">Mark checked</button>`}</td>
+              <td class="actions nowrap">
+                <a class="btn-link" href="#/s/${esc(sectionIdFor(r.table))}">Open section</a>
+                <button class="btn-link danger" data-recent-delete="${r.id}">Delete</button>
+              </td>
             </tr>`;
           }).join('')}
         </tbody></table></div>`
-        : `<p class="empty">${onlyUnchecked ? 'Nothing is waiting to be checked.' : 'No entries yet.'}</p>`}
+        : '<p class="empty">No entries yet.</p>'}
       </section>`;
 
-    $main.querySelectorAll('[data-recent]').forEach(b =>
-      b.addEventListener('click', () => drawRecent(b.dataset.recent === 'unchecked')));
-    $main.querySelectorAll('[data-recent-verify]').forEach(b =>
+    $main.querySelectorAll('[data-recent-delete]').forEach(b =>
       b.addEventListener('click', async () => {
+        if (!window.confirm('Delete this entry? This cannot be undone.')) return;
         try {
-          await api('POST', `/api/entries/${b.dataset.recentVerify}/verify`, { verified: true });
+          await api('DELETE', `/api/entries/${b.dataset.recentDelete}`);
+          toast('Entry deleted');
           drawRecent();
         } catch (err) { toast(err.message); }
       }));
+  }
+
+  // Which section page holds a given table, so the admin can jump there to correct it.
+  function sectionIdFor(tableId) {
+    for (const cat of categories) {
+      for (const s of cat.sections) if (!s.overview && !s.recent && s.tables.includes(tableId)) return s.id;
+    }
+    return '';
   }
 
   // ---------- first sign-in ----------

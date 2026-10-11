@@ -2,7 +2,7 @@
 // Only the standing list of treatment plants is seeded: the waste and sewage figures are
 // now built up from daily entries, so there is nothing to pre-fill for them.
 module.exports = function seed(db) {
-  const insert = db.prepare('INSERT INTO entries (table_id, period, data, created_by, verified) VALUES (?, ?, ?, ?, 1)');
+  const insert = db.prepare('INSERT INTO entries (table_id, period, data, created_by) VALUES (?, ?, ?, ?)');
   const add = (table, period, data) => insert.run(table, period, JSON.stringify(data), 'published');
 
   // Sewage and effluent treatment plants

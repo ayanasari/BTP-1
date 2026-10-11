@@ -35,7 +35,6 @@ db.exec(`
 // Columns added after the first version of the portal.
 const entryCols = new Set(db.prepare(`PRAGMA table_info(entries)`).all().map(c => c.name));
 if (!entryCols.has('created_by')) db.exec(`ALTER TABLE entries ADD COLUMN created_by TEXT`);
-if (!entryCols.has('verified')) db.exec(`ALTER TABLE entries ADD COLUMN verified INTEGER NOT NULL DEFAULT 0`);
 
 users.init(db);
 users.purgeExpired(db);
@@ -88,7 +87,7 @@ function rowOut(r) {
   return {
     id: r.id, table: r.table_id, period: r.period, data: JSON.parse(r.data),
     created_at: r.created_at, updated_at: r.updated_at,
-    created_by: r.created_by || null, verified: !!r.verified,
+    created_by: r.created_by || null,
   };
 }
 
@@ -293,22 +292,16 @@ async function handleApi(req, res, url, user, token) {
     if (!users.isAdmin(user)) throw new HttpError(403, 'Administrators only.');
     const known = Object.keys(SDSI.tables);
     const marks = known.map(() => '?').join(',');
-    const unchecked = url.searchParams.get('unchecked') === '1';
     const limit = Math.min(Number(url.searchParams.get('limit')) || 100, 500);
     // The figures loaded from the SDSI pages on first start are not anyone's entry,
     // so they stay out of a list that answers "who has been entering what".
     const rows = db.prepare(`SELECT * FROM entries WHERE table_id IN (${marks})
       AND IFNULL(created_by, '') != 'published'
-      ${unchecked ? 'AND verified = 0' : ''}
       ORDER BY datetime(created_at) DESC, id DESC LIMIT ?`).all(...known, limit);
-    const waiting = db.prepare(`SELECT COUNT(*) AS n FROM entries
-      WHERE table_id IN (${marks}) AND IFNULL(created_by, '') != 'published'
-      AND verified = 0`).get(...known).n;
-    return sendJson(res, 200, { entries: rows.map(rowOut), waiting });
+    return sendJson(res, 200, { entries: rows.map(rowOut) });
   }
 
   const idMatch = p.match(/^\/api\/entries\/(\d+)$/);
-  const verifyMatch = p.match(/^\/api\/entries\/(\d+)\/verify$/);
 
   if (p === '/api/entries' && req.method === 'GET') {
     const ids = (url.searchParams.get('tables') || '').split(',').filter(Boolean);
@@ -324,19 +317,9 @@ async function handleApi(req, res, url, user, token) {
   if (p === '/api/entries' && req.method === 'POST') {
     const body = await readBody(req);
     const { period, data } = clean(user, body.table, body.period, body.data);
-    const info = db.prepare(`INSERT INTO entries (table_id, period, data, created_by, verified)
-      VALUES (?, ?, ?, ?, ?)`).run(body.table, period, JSON.stringify(data), user.username, users.isAdmin(user) ? 1 : 0);
+    const info = db.prepare(`INSERT INTO entries (table_id, period, data, created_by)
+      VALUES (?, ?, ?, ?)`).run(body.table, period, JSON.stringify(data), user.username);
     return sendJson(res, 201, rowOut(db.prepare('SELECT * FROM entries WHERE id = ?').get(info.lastInsertRowid)));
-  }
-
-  if (verifyMatch && req.method === 'POST') {
-    if (!users.isAdmin(user)) throw new HttpError(403, 'Administrators only.');
-    const id = Number(verifyMatch[1]);
-    const existing = db.prepare('SELECT * FROM entries WHERE id = ?').get(id);
-    if (!existing) throw new HttpError(404, 'Entry not found');
-    const body = await readBody(req);
-    db.prepare('UPDATE entries SET verified = ? WHERE id = ?').run(body.verified === false ? 0 : 1, id);
-    return sendJson(res, 200, rowOut(db.prepare('SELECT * FROM entries WHERE id = ?').get(id)));
   }
 
   if (idMatch && (req.method === 'PUT' || req.method === 'DELETE')) {
@@ -352,8 +335,8 @@ async function handleApi(req, res, url, user, token) {
     }
     const body = await readBody(req);
     const { period, data } = clean(user, existing.table_id, body.period, body.data, id);
-    db.prepare(`UPDATE entries SET period = ?, data = ?, updated_at = CURRENT_TIMESTAMP,
-      verified = ? WHERE id = ?`).run(period, JSON.stringify(data), users.isAdmin(user) ? existing.verified : 0, id);
+    db.prepare(`UPDATE entries SET period = ?, data = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?`).run(period, JSON.stringify(data), id);
     return sendJson(res, 200, rowOut(db.prepare('SELECT * FROM entries WHERE id = ?').get(id)));
   }
 
