@@ -386,12 +386,17 @@
       const hortTotal = m => add(...monthRows('horticulture_waste', m).map(r => tables.horticulture_waste.calc(r).total_kg));
 
       const body = list.map(m => {
-        const wet = sumOf(monthRows('mess_waste', m), 'food_kg');
+        // Food waste weighed by the four hall messes.
+        const food = sumOf(monthRows('mess_waste', m), 'food_kg');
+        // Wet waste as the institute publishes it. The messes are the only wet waste the
+        // portal collects today, so the two are equal; wet waste gathered from bins
+        // elsewhere on campus is added here once it is weighed separately.
+        const wet = food;
         const dry = sumOf(monthRows('dry_waste', m), 'dry_kg');
         const hort = hortTotal(m);
         return {
           month: m,
-          horticulture: tons(hort), dry: tons(dry), wet: tons(wet),
+          horticulture: tons(hort), dry: tons(dry), wet: tons(wet), food: tons(food),
           total: tons(add(hort, dry, wet)),
           recycled: tons(sumOf(monthRows('recyclables_sold', m), 'qty_kg')),
           processed: tons(sumOf(monthRows('waste_processed', m), 'input_kg')),
@@ -402,20 +407,22 @@
       const fyRows = Object.entries(groupBy(body, b => fyOfMonth(b.month)))
         .sort((a, b) => b[0].localeCompare(a[0]))
         .map(([fy, bs]) => [fy, bs.length,
-          fmt(add(...bs.map(b => b.horticulture)), 3), fmt(add(...bs.map(b => b.dry)), 3), fmt(add(...bs.map(b => b.wet)), 3),
+          fmt(add(...bs.map(b => b.horticulture)), 3), fmt(add(...bs.map(b => b.dry)), 3),
+          fmt(add(...bs.map(b => b.wet)), 3), fmt(add(...bs.map(b => b.food)), 3),
           fmt(add(...bs.map(b => b.total)), 3), fmt(add(...bs.map(b => b.recycled)), 3),
           fmt(add(...bs.map(b => b.processed)), 3), fmt(add(...bs.map(b => b.ewaste)), 0)]);
 
       return {
         title: 'Waste generated, monthly',
         intro: 'Every figure here is added up from the daily entries. Nothing on this page is typed in by hand.',
-        head: ['Month', 'Horticulture Waste, Tons', 'Dry Waste, Tons', 'Wet Waste, Tons', 'Total Solid Waste, Tons',
+        head: ['Month', 'Horticulture Waste, Tons', 'Dry Waste, Tons', 'Wet Waste, Tons',
+               'Food Waste, Tons', 'Total Solid Waste, Tons',
                'Dry Waste Recycled, Tons', 'Bio/Food Waste Processed, Tons', 'Electronic Waste, Kg'],
         rows: body.map(b => [formatMonth(b.month), fmt(b.horticulture, 3), fmt(b.dry, 3), fmt(b.wet, 3),
-          fmt(b.total, 3), fmt(b.recycled, 3), fmt(b.processed, 3), fmt(b.ewaste, 0)]),
+          fmt(b.food, 3), fmt(b.total, 3), fmt(b.recycled, 3), fmt(b.processed, 3), fmt(b.ewaste, 0)]),
         extra: fyRows.length ? {
           title: 'By financial year',
-          head: ['Financial year', 'Months with data', 'Horticulture, Tons', 'Dry, Tons', 'Wet, Tons',
+          head: ['Financial year', 'Months with data', 'Horticulture, Tons', 'Dry, Tons', 'Wet, Tons', 'Food, Tons',
                  'Total, Tons', 'Recycled, Tons', 'Processed, Tons', 'E-waste, Kg'],
           rows: fyRows,
         } : null,
