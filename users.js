@@ -22,7 +22,7 @@ const DIVISIONS = [
     tables: ['dry_waste', 'recyclables_sold', 'ewaste_disposal'] },
   { username: 'horticulture', email: 'horticulture@iitkgp.ac.in', name: 'Horticulture Section', role: 'staff', scope: null,
     tables: ['horticulture_waste'] },
-  { username: 'processing', email: 'biogas@iitkgp.ac.in', name: 'Organic waste processing', role: 'staff', scope: null,
+  { username: 'biogas', email: 'biogas@iitkgp.ac.in', name: 'Biogas and composting', role: 'staff', scope: null,
     tables: ['waste_processed'] },
   { username: 'stp', email: 'stp@iitkgp.ac.in', name: 'Sewage treatment', role: 'staff', scope: null,
     tables: ['stp_daily', 'stp_lab'] },
@@ -30,6 +30,10 @@ const DIVISIONS = [
 
 // A session dies after this long without use, so a browser left open on a shared
 // machine doesn't stay signed in overnight. Every request pushes the deadline back.
+// Divisions renamed since an earlier version. The account keeps its password, its
+// sessions and everything it has entered; only the name it signs in with changes.
+const RENAMED = { processing: 'biogas' };
+
 const SESSION_IDLE_HOURS = 12;
 // Five wrong passwords in a row locks that username for a few minutes.
 const MAX_ATTEMPTS = 5;
@@ -102,9 +106,14 @@ function ensureDivisions(db, dataDir) {
     insert.run(d.username, d.email || null, d.name, d.role, d.scope, JSON.stringify(d.tables), salt, hash);
     created.push({ ...d, password });
   }
-  // An address edited in DIVISIONS takes effect on the next start, without touching anything else.
-  const setEmail = db.prepare(`UPDATE users SET email = ? WHERE username = ? AND IFNULL(email, '') != IFNULL(?, '')`);
-  DIVISIONS.forEach(d => setEmail.run(d.email || null, d.username, d.email || null));
+  // DIVISIONS is the source of truth for how an account is configured, so an edit there
+  // takes effect on the next start — its address, its display name, which tables it may
+  // enter. Only the password, and whether an admin switched the account off, live in the
+  // database and are left alone here.
+  const sync = db.prepare(`UPDATE users SET email = ?, name = ?, role = ?, scope = ?, tables_json = ?
+    WHERE username = ?`);
+  DIVISIONS.forEach(d =>
+    sync.run(d.email || null, d.name, d.role, d.scope, JSON.stringify(d.tables), d.username));
 
   if (!created.length) return [];
 
@@ -221,7 +230,7 @@ const isAdmin = user => !!user && user.role === 'admin';
 const canUse = (user, tableId) => !!user && (user.tables === '*' || user.tables.includes(tableId));
 
 module.exports = {
-  DIVISIONS, SESSION_IDLE_HOURS, MAX_ATTEMPTS, LOCKOUT_MINUTES, MIN_PASSWORD,
+  DIVISIONS, RENAMED, SESSION_IDLE_HOURS, MAX_ATTEMPTS, LOCKOUT_MINUTES, MIN_PASSWORD,
   init, ensureDivisions, list, byName, byId, shape,
   authenticate, setPassword, resetPassword, makePassword, hashPassword, verifyPassword,
   lockedFor, noteFailure,

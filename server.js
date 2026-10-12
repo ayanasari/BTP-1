@@ -70,6 +70,17 @@ if (!metaGet('seeded')) {
   metaSet('seeded', new Date().toISOString());
 }
 
+// A division renamed in users.js keeps its account rather than becoming a second one.
+for (const [from, to] of Object.entries(users.RENAMED)) {
+  const old = db.prepare('SELECT id FROM users WHERE username = ?').get(from);
+  const taken = db.prepare('SELECT id FROM users WHERE username = ?').get(to);
+  if (old && !taken) {
+    db.prepare('UPDATE users SET username = ? WHERE id = ?').run(to, old.id);
+    db.prepare('UPDATE entries SET created_by = ? WHERE created_by = ?').run(to, from);
+    console.log(`  The "${from}" account is now called "${to}". Its password and entries are unchanged.`);
+  }
+}
+
 users.ensureDivisions(db, DATA_DIR);
 
 const PERIOD_PATTERNS = {

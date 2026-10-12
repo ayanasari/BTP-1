@@ -25,7 +25,7 @@ to type.
 | rk.mess@iitkgp.ac.in | `mess_rk` | food waste, RK Hall | daily |
 | sanitation@iitkgp.ac.in | `sanitation` | dry waste total, recyclables sold, e-waste handed over | daily / per lot / per event |
 | horticulture@iitkgp.ac.in | `horticulture` | dry leaves and garden waste, composted on site | daily |
-| biogas@iitkgp.ac.in | `processing` | organic waste received and compost or gas produced | daily |
+| biogas@iitkgp.ac.in | `biogas` | organic waste received and compost or gas produced | daily |
 | stp@iitkgp.ac.in | `stp` | daily plant log and laboratory readings, for all 7 plants | daily / per report |
 
 **The addresses above are placeholders.** Change them to the real ones in the `DIVISIONS` list at
