@@ -205,7 +205,12 @@
       <div class="crumbs"><a href="#/">Home</a> › ${esc(cat.title)}</div>
       <h1>${esc(section.title)}</h1>
       <section class="card">
-        <div class="card-head"><h2>${esc(o.title)}</h2></div>
+        <div class="card-head">
+          <h2>${esc(o.title)}</h2>
+          <div class="head-actions">
+            <button class="btn btn-primary" id="overviewPdf">Get report (PDF)</button>
+          </div>
+        </div>
         <p class="card-note">${esc(o.intro)}</p>
         ${o.rows.length ? miniTable(o) : '<p class="empty">No entries yet, so there is nothing to add up.</p>'}
       </section>
@@ -214,6 +219,17 @@
           <div class="card-head"><h2>${esc(o.extra.title)}</h2></div>
           ${miniTable(o.extra)}
         </section>` : ''}`;
+
+    // The summary has no date range to pick: it is every entry, added up.
+    document.getElementById('overviewPdf').addEventListener('click', () => {
+      try {
+        const name = window.SDSIReport.buildOverview({ cat, section, overview: o });
+        toast(`Downloaded ${name}`);
+      } catch (err) {
+        console.error(err);
+        toast('Could not create the PDF');
+      }
+    });
   }
 
   // ---------- report panel ----------

@@ -204,5 +204,83 @@
     return name;
   }
 
-  window.SDSIReport = { build };
+  // The monthly summary as a PDF: the published columns, and the same figures by
+  // financial year. Nothing here is typed in, so there is no date range to choose —
+  // it is everything that has been entered.
+  function buildOverview({ cat, section, overview }) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const W = doc.internal.pageSize.getWidth();
+    const H = doc.internal.pageSize.getHeight();
+    const M = 12;
+    const now = new Date();
+    const generated = `${formatDate(now.toISOString())}, ${now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`;
+
+    doc.setFillColor(...BRAND);
+    doc.rect(0, 0, W, 24, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text(pdfText(overview.title), M, 11);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9.5);
+    doc.text(pdfText(`IIT Kharagpur - Sustainability (SDSI) - ${cat.title} > ${section.title}`), M, 18);
+
+    doc.setTextColor(...MUTED);
+    doc.setFontSize(8.5);
+    doc.text(`Generated: ${pdfText(generated)}`, W - M, 32, { align: 'right' });
+    doc.setTextColor(...TEXT);
+    doc.setFontSize(9);
+    doc.text(pdfText(overview.intro), M, 32);
+    let y = 40;
+
+    const grid = (head, rows) => runTable(doc, {
+      startY: y,
+      head: [head.map(pdfText)],
+      body: rows.map(r => r.map(v => pdfText(String(v)))),
+      theme: 'grid',
+      margin: { left: M, right: M, top: 14, bottom: 14 },
+      styles: { font: 'helvetica', fontSize: 8, cellPadding: 1.8, overflow: 'linebreak', textColor: TEXT, lineColor: LINE, lineWidth: 0.1, valign: 'top' },
+      headStyles: { fillColor: HEAD_BG, textColor: BRAND, fontStyle: 'bold', valign: 'bottom' },
+      columnStyles: head.reduce((m, _, i) => (i ? (m[i] = { halign: 'right' }) : null, m), {}),
+      didParseCell(d) { if (d.section === 'head' && d.column.index) d.cell.styles.halign = 'right'; },
+    });
+
+    if (overview.rows.length) {
+      y = grid(overview.head, overview.rows);
+    } else {
+      doc.setFontSize(9.5);
+      doc.text('No entries yet, so there is nothing to add up.', M, y + 5);
+      y += 16;
+    }
+
+    if (overview.extra && overview.extra.rows.length) {
+      y += 8;
+      if (y > H - 40) { doc.addPage(); y = 16; }
+      doc.setTextColor(...TEXT);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.text(pdfText(overview.extra.title), M, y);
+      y += 2;
+      y = grid(overview.extra.head, overview.extra.rows);
+    }
+
+    const pages = doc.getNumberOfPages();
+    for (let i = 1; i <= pages; i++) {
+      doc.setPage(i);
+      doc.setDrawColor(...LINE);
+      doc.line(M, H - 9, W - M, H - 9);
+      doc.setFontSize(8);
+      doc.setTextColor(...MUTED);
+      doc.setFont('helvetica', 'normal');
+      doc.text(pdfText(`SDSI Data Entry - ${overview.title} - added up from the daily entries`), M, H - 5);
+      doc.text(`Page ${i} of ${pages}`, W - M, H - 5, { align: 'right' });
+    }
+
+    const name = `SDSI_${section.id.replace(/-/g, '_')}.pdf`;
+    doc.save(name);
+    return name;
+  }
+
+  window.SDSIReport = { build, buildOverview };
 })();

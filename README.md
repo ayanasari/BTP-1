@@ -172,7 +172,7 @@ In Windows PowerShell that is `$env:HOST="127.0.0.1"; node server.js`. Behind an
 - `seed.js`: the published list of treatment plants, loaded on first start.
 - `public/login.html`: the sign-in page.
 - `public/app.js`, `public/styles.css`, `public/index.html`: the page.
-- `public/report.js`: builds the PDF reports.
+- `public/report.js`: builds the PDF reports, both per table and for the monthly summary.
 - `public/vendor/`: jsPDF and jsPDF-AutoTable (MIT licence, licence files included).
 - `docs/`: the column specification taken from the SDSI site tables.
 
