@@ -11,7 +11,7 @@ A website for entering and reporting IIT Kharagpur sustainability (SDSI) data. I
 - **PDF reports per table:** the last N days, months or years, a custom date range, or all
   entries, with every column, its dates, calculated values and a summary.
 
-## The nine accounts
+## The 31 accounts
 
 People sign in with **either their email or the short username** — whichever they find easier
 to type.
@@ -19,17 +19,51 @@ to type.
 | Signs in with | Or | Enters | How often |
 | --- | --- | --- | --- |
 | sdsi.admin@iitkgp.ac.in | `admin` | everything, plus the monthly summary and the account list | as needed |
-| azad.mess@iitkgp.ac.in | `mess_azad` | food waste, Azad Hall | daily |
-| patel.mess@iitkgp.ac.in | `mess_patel` | food waste, Patel Hall | daily |
-| nehru.mess@iitkgp.ac.in | `mess_nehru` | food waste, Nehru Hall | daily |
-| rk.mess@iitkgp.ac.in | `mess_rk` | food waste, RK Hall | daily |
 | sanitation@iitkgp.ac.in | `sanitation` | dry waste total, recyclables sold, e-waste handed over | daily / per lot / per event |
 | horticulture@iitkgp.ac.in | `horticulture` | dry leaves and garden waste, composted on site | daily |
 | biogas@iitkgp.ac.in | `biogas` | organic waste received and compost or gas produced | daily |
 | stp@iitkgp.ac.in | `stp` | daily plant log and laboratory readings, for all 7 plants | daily / per report |
 
-**The addresses above are placeholders.** Change them to the real ones in the `DIVISIONS` list at
-the top of `users.js` and restart; the new address is picked up without disturbing anything else.
+Then **one mess account per hall of residence** — 26 of them. Each enters food waste, daily,
+for its own hall and no other. The address is `<hall>.mess@iitkgp.ac.in` and the short
+username is `mess_<hall>`:
+
+| Hall | Short username |
+| --- | --- |
+| Atal Bihari Vajpayee (ABV) | `mess_abv` |
+| B R Ambedkar | `mess_ambedkar` |
+| Azad | `mess_azad` |
+| B C Roy | `mess_bcroy` |
+| Gokhale | `mess_gokhale` |
+| Homi J Bhabha (HJB) | `mess_hjb` |
+| Jagadish Chandra Bose (JCB) | `mess_jcb` |
+| Lal Bahadur Shastri (LBS) | `mess_lbs` |
+| Lala Lajpat Rai (LLR) | `mess_llr` |
+| Madan Mohan Malviya (MMM) | `mess_mmm` |
+| Meghnad Saha | `mess_msaha` |
+| Mother Teresa | `mess_mteresa` |
+| Nehru | `mess_nehru` |
+| Sister Nivedita | `mess_nivedita` |
+| Patel | `mess_patel` |
+| Radha Krishnan (RK) | `mess_rk` |
+| Rajendra Prasad (RP) | `mess_rp` |
+| Rani Laxmibai | `mess_rlb` |
+| SAM | `mess_sam` |
+| Sarojini Naidu – Indira Gandhi (SNIG) | `mess_snig` |
+| Savitribai Phule | `mess_savitribai` |
+| Vidyasagar | `mess_vidyasagar` |
+| Zakir Hussain | `mess_zakir` |
+| VSRC-1 | `mess_vsrc1` |
+| VSRC-2 | `mess_vsrc2` |
+| PDF Block | `mess_pdf` |
+
+Savitribai Phule is one account even though HMC lists two blocks, because the two share a
+kitchen. VSRC-1, VSRC-2 and PDF Block are not called halls of residence, but they have
+boarders who eat, so they are in.
+
+**The addresses above are placeholders.** Change them to the real ones in the `MESSES` and
+`DIVISIONS` lists at the top of `users.js` and restart; the new address is picked up without
+disturbing anything else.
 
 A mess manager's whole screen is: today's date, one number, Save.
 
@@ -178,6 +212,14 @@ In Windows PowerShell that is `$env:HOST="127.0.0.1"; node server.js`. Behind an
 
 ## Adding a hall or a plant
 
-Add the name to `HALLS` or `PLANTS` in `public/schema.js`, then add the account to `DIVISIONS`
-in `users.js` with its `scope` set to that name. Restart the server; the new account is created
-with a password written to `data/initial-passwords.txt`.
+Add the name to `HALLS` or `PLANTS` in `public/schema.js`, then add a line to `MESSES` (for a
+hall) or `DIVISIONS` (for anything else) in `users.js`, with `scope` set to **exactly** the
+name you put in `schema.js`. Restart the server; the new account is created with a password
+written to `data/initial-passwords.txt`.
+
+If the two spellings don't match, the server refuses to start and tells you which account is
+wrong — a scoped account whose scope isn't on the form can enter nothing, which is otherwise
+very hard to spot.
+
+Do **not** reword a hall that already has entries against it. The name is stored inside every
+entry, so changing it orphans those rows. Add the new name and move the rows, or leave it.

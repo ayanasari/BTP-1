@@ -29,7 +29,7 @@ const list = () => db.prepare('SELECT username, email, name, must_change FROM us
 if (!who) {
   console.log('\n  Accounts on this site:\n');
   list().forEach(u => console.log(
-    `    ${(u.email || '—').padEnd(28)} ${u.username.padEnd(14)} ${u.must_change ? 'has not chosen a password yet' : 'password set by the user'}`
+    `    ${(u.email || '—').padEnd(32)} ${u.username.padEnd(18)} ${u.must_change ? 'has not chosen a password yet' : 'password set by the user'}`
   ));
   console.log('\n  To give one a new password:  node reset-password.js <username>');
   console.log('  Or choose it yourself:       node reset-password.js <username> <password>\n');

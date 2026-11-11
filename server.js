@@ -81,6 +81,23 @@ for (const [from, to] of Object.entries(users.RENAMED)) {
   }
 }
 
+// A scoped account can only enter rows whose scopeField equals its scope, so a scope that
+// is not one of the choices on the form means that account can enter nothing at all. That
+// is silent at runtime and maddening to debug, so it stops the server here instead.
+for (const d of users.DIVISIONS) {
+  if (!d.scope) continue;
+  const scoped = (d.tables === '*' ? Object.keys(SDSI.tables) : d.tables)
+    .map(id => SDSI.tables[id]).filter(t => t && t.scopeField);
+  for (const t of scoped) {
+    const field = t.fields.find(f => f.key === t.scopeField);
+    if (field?.options && !field.options.includes(d.scope)) {
+      console.error(`\n  Account "${d.username}" is scoped to "${d.scope}", which is not one of the`);
+      console.error(`  ${field.label} choices in public/schema.js. Fix the spelling in one place or the other.\n`);
+      process.exit(1);
+    }
+  }
+}
+
 users.ensureDivisions(db, DATA_DIR);
 
 const PERIOD_PATTERNS = {

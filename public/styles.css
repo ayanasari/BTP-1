@@ -175,6 +175,8 @@ table.data td.long { min-width: 260px; max-width: 420px; }
 /* ---------- report ---------- */
 .report { padding: 14px 18px 16px; border-top: 1px solid var(--border); }
 .report-title { font-size: 12px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); font-weight: 700; margin-bottom: 10px; }
+.report-caption { font-size: 13px; font-weight: 700; color: var(--brand-strong); margin: 14px 0 6px; }
+.report-caption:first-child { margin-top: 0; }
 .stats { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
 .stat { background: var(--brand-soft); border-radius: 8px; padding: 8px 14px; min-width: 150px; }
 .stat .v { font-size: 18px; font-weight: 700; color: var(--brand-strong); }

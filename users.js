@@ -4,19 +4,58 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 
-// The nine divisions. `tables` is what the account may see and edit; '*' means everything.
-// `scope` locks the account to one value of the table's scopeField (the hall, for a mess).
+// Every account on the portal. `tables` is what the account may see and edit; '*' means
+// everything. `scope` locks the account to one value of the table's scopeField — for a mess,
+// its own hall, which is why the hall is not a dropdown for them.
 //
 // CHANGE THE EMAIL ADDRESSES to the real ones before anyone uses this. People sign in with
 // either the email or the short username, whichever they find easier to type. An address
 // changed here is picked up the next time the server starts.
+//
+// One mess account per hall of residence. `scope` must match a name in HALLS in
+// public/schema.js exactly, or that account can enter nothing — the server refuses to
+// start on a mismatch rather than let it go unnoticed.
+// The full hall name lives here; the short form people say is what HALLS carries.
+const MESSES = [
+  ['mess_abv', 'abv', 'Atal Bihari Vajpayee Hall', 'ABV Hall'],
+  ['mess_ambedkar', 'ambedkar', 'B R Ambedkar Hall', 'Ambedkar Hall'],
+  ['mess_azad', 'azad', 'Azad Hall', 'Azad Hall'],
+  ['mess_bcroy', 'bcroy', 'B C Roy Hall', 'BC Roy Hall'],
+  ['mess_gokhale', 'gokhale', 'Gokhale Hall', 'Gokhale Hall'],
+  ['mess_hjb', 'hjb', 'Homi J Bhabha Hall', 'HJB Hall'],
+  ['mess_jcb', 'jcb', 'Jagadish Chandra Bose Hall', 'JCB Hall'],
+  ['mess_lbs', 'lbs', 'Lal Bahadur Shastri Hall', 'LBS Hall'],
+  ['mess_llr', 'llr', 'Lala Lajpat Rai Hall', 'LLR Hall'],
+  ['mess_mmm', 'mmm', 'Madan Mohan Malviya Hall', 'MMM Hall'],
+  ['mess_msaha', 'msaha', 'Meghnad Saha Hall', 'Meghnad Saha Hall'],
+  ['mess_mteresa', 'mteresa', 'Mother Teresa Hall', 'Mother Teresa Hall'],
+  ['mess_nehru', 'nehru', 'Nehru Hall', 'Nehru Hall'],
+  ['mess_nivedita', 'nivedita', 'Sister Nivedita Hall', 'Nivedita Hall'],
+  ['mess_patel', 'patel', 'Patel Hall', 'Patel Hall'],
+  ['mess_rk', 'rk', 'Radha Krishnan Hall', 'RK Hall'],
+  ['mess_rp', 'rp', 'Rajendra Prasad Hall', 'RP Hall'],
+  ['mess_rlb', 'rlb', 'Rani Laxmibai Hall', 'Rani Laxmibai Hall'],
+  ['mess_sam', 'sam', 'SAM Hall', 'SAM Hall'],
+  ['mess_snig', 'snig', 'Sarojini Naidu – Indira Gandhi Hall', 'SNIG Hall'],
+  ['mess_savitribai', 'savitribai', 'Savitribai Phule Hall', 'Savitribai Phule Hall'],
+  ['mess_vidyasagar', 'vidyasagar', 'Vidyasagar Hall', 'Vidyasagar Hall'],
+  ['mess_zakir', 'zakir', 'Zakir Hussain Hall', 'Zakir Hussain Hall'],
+  ['mess_vsrc1', 'vsrc1', 'VSRC-1', 'VSRC-1'],
+  ['mess_vsrc2', 'vsrc2', 'VSRC-2', 'VSRC-2'],
+  ['mess_pdf', 'pdfblock', 'PDF Block', 'PDF Block'],
+].map(([username, slug, full, hall]) => ({
+  username,
+  email: `${slug}.mess@iitkgp.ac.in`,
+  name: `${full} mess`,
+  role: 'staff',
+  scope: hall,
+  tables: ['mess_waste'],
+}));
+
 const DIVISIONS = [
   { username: 'admin', email: 'sdsi.admin@iitkgp.ac.in', name: 'Administrator', role: 'admin', scope: null, tables: '*' },
 
-  { username: 'mess_azad', email: 'azad.mess@iitkgp.ac.in', name: 'Azad Hall mess', role: 'staff', scope: 'Azad Hall', tables: ['mess_waste'] },
-  { username: 'mess_patel', email: 'patel.mess@iitkgp.ac.in', name: 'Patel Hall mess', role: 'staff', scope: 'Patel Hall', tables: ['mess_waste'] },
-  { username: 'mess_nehru', email: 'nehru.mess@iitkgp.ac.in', name: 'Nehru Hall mess', role: 'staff', scope: 'Nehru Hall', tables: ['mess_waste'] },
-  { username: 'mess_rk', email: 'rk.mess@iitkgp.ac.in', name: 'RK Hall mess', role: 'staff', scope: 'RK Hall', tables: ['mess_waste'] },
+  ...MESSES,
 
   { username: 'sanitation', email: 'sanitation@iitkgp.ac.in', name: 'Sanitation Section', role: 'staff', scope: null,
     tables: ['dry_waste', 'recyclables_sold', 'ewaste_disposal'] },
@@ -128,7 +167,7 @@ function ensureDivisions(db, dataDir) {
     '',
     'Either the email or the short name below works as the sign-in.',
     '',
-    ...created.map(c => `${(c.email || '—').padEnd(28)} ${c.username.padEnd(14)} ${c.password.padEnd(22)} ${c.name}`),
+    ...created.map(c => `${(c.email || '—').padEnd(32)} ${c.username.padEnd(18)} ${c.password.padEnd(22)} ${c.name}`),
     '',
   ].join('\n');
   fs.writeFileSync(file, lines, { mode: 0o600 });

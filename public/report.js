@@ -149,7 +149,9 @@
       });
 
       const s = t.summary ? t.summary(selected, ctx) : null;
-      if (s && (s.items?.length || s.table?.rows?.length)) {
+      // One `table` or several in `tables` — a summary may return either.
+      const grids = s ? (s.tables || (s.table ? [s.table] : [])).filter(g => g?.rows?.length) : [];
+      if (s && (s.items?.length || grids.length)) {
         y += 4;
         if (y > H - 30) { doc.addPage(); y = 16; }
         doc.setTextColor(...TEXT);
@@ -169,18 +171,27 @@
             didParseCell(d) { if (s.items[d.row.index]?.flag && d.column.index === 1) d.cell.styles.textColor = [180, 35, 24]; },
           });
         }
-        if (s.table?.rows?.length) {
+        grids.forEach(g => {
+          y += 2;
+          if (g.caption) {
+            if (y > H - 30) { doc.addPage(); y = 16; }
+            doc.setTextColor(...TEXT);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(8.5);
+            doc.text(pdfText(g.caption), M, y + 3);
+            y += 4;
+          }
           y = runTable(doc, {
-            startY: y + 2,
-            head: [s.table.head.map(pdfText)],
-            body: s.table.rows.map(r => r.map(pdfText)),
+            startY: y,
+            head: [g.head.map(pdfText)],
+            body: g.rows.map(r => r.map(pdfText)),
             theme: 'grid',
             tableWidth: 'wrap',
             margin: { left: M, right: M, top: 14, bottom: 14 },
             styles: { fontSize: 8, cellPadding: 1.4, textColor: TEXT, lineColor: LINE, lineWidth: 0.1 },
             headStyles: { fillColor: HEAD_BG, textColor: BRAND, fontStyle: 'bold' },
           });
-        }
+        });
       }
       y += 10;
     });

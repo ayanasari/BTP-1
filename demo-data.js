@@ -55,7 +55,19 @@ function add(table, period, data) {
   added++;
 }
 
-const HALLS = [['Azad Hall', 170], ['Patel Hall', 145], ['Nehru Hall', 195], ['RK Hall', 125]];
+// Every hall, with a plausible daily figure in kg — bigger halls waste more. PDF Block is
+// deliberately left at null: a hall that has not started reporting shows as a blank row on
+// the administrator's by-hall table, which is what that table is for.
+const HALLS = [
+  ['ABV Hall', 185], ['Ambedkar Hall', 150], ['Azad Hall', 170], ['BC Roy Hall', 160],
+  ['Gokhale Hall', 120], ['HJB Hall', 175], ['JCB Hall', 140], ['LBS Hall', 190],
+  ['LLR Hall', 205], ['MMM Hall', 180], ['Meghnad Saha Hall', 115],
+  ['Mother Teresa Hall', 105], ['Nehru Hall', 195], ['Nivedita Hall', 130],
+  ['Patel Hall', 145], ['RK Hall', 125], ['RP Hall', 165], ['Rani Laxmibai Hall', 110],
+  ['SAM Hall', 95], ['SNIG Hall', 135], ['Savitribai Phule Hall', 200],
+  ['Vidyasagar Hall', 210], ['Zakir Hussain Hall', 155], ['VSRC-1', 85], ['VSRC-2', 80],
+  ['PDF Block', null],
+];
 
 // Stops at yesterday: today is left empty so there is something to enter live.
 for (let d = DAYS; d >= 1; d--) {
@@ -63,9 +75,11 @@ for (let d = DAYS; d >= 1; d--) {
   const sunday = new Date(day).getDay() === 0;
 
   HALLS.forEach(([hall, base]) => {
+    if (base == null) return;        // a hall that has not started entering yet
     if (rnd() < 0.05) return;        // the occasional day nobody weighed
-    // Halls are quieter at the weekend.
-    add('mess_waste', day, { hall, food_kg: near(sunday ? base * 0.75 : base, 55) });
+    // Halls are quieter at the weekend. The spread scales with the hall so a small
+    // block doesn't swing as wildly as a big one.
+    add('mess_waste', day, { hall, food_kg: near(sunday ? base * 0.75 : base, base * 0.3) });
   });
 
   add('dry_waste', day, { dry_kg: near(sunday ? 620 : 840, 240) });

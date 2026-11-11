@@ -61,7 +61,22 @@
   const formatMonth = m => formatPeriod('month', m);
 
   // ---------- fixed lists ----------
-  const HALLS = ['Azad Hall', 'Patel Hall', 'Nehru Hall', 'RK Hall'];
+  // Every hall of residence on campus, plus the three research blocks that have boarders
+  // but are not called halls (VSRC-1, VSRC-2, PDF Block). Savitribai Phule is one entry
+  // even though HMC lists two blocks, because the two blocks share one kitchen.
+  //
+  // These strings are stored inside every entry, so DO NOT reword one that is already in
+  // use — an entry made against the old wording would stop matching. To rename a hall,
+  // add the new wording and migrate the rows, or leave it alone. The short forms below are
+  // what people on campus actually say; the full name sits on the account in users.js.
+  const HALLS = [
+    'ABV Hall', 'Ambedkar Hall', 'Azad Hall', 'BC Roy Hall', 'Gokhale Hall',
+    'HJB Hall', 'JCB Hall', 'LBS Hall', 'LLR Hall', 'MMM Hall',
+    'Meghnad Saha Hall', 'Mother Teresa Hall', 'Nehru Hall', 'Nivedita Hall',
+    'Patel Hall', 'RK Hall', 'RP Hall', 'Rani Laxmibai Hall', 'SAM Hall',
+    'SNIG Hall', 'Savitribai Phule Hall', 'Vidyasagar Hall', 'Zakir Hussain Hall',
+    'VSRC-1', 'VSRC-2', 'PDF Block',
+  ];
   const PLANTS = [
     'STP-1', 'STP at Pump house 3', 'STP at SPMS Hospital',
     'STP for Diamond Jubilee Complex (DJC)', 'STP at Nehru Hall',
@@ -87,24 +102,41 @@
         const byMonth = groupBy(rows.filter(r => r.period), monthOf);
         const months = byKeyDesc(byMonth);
         const latest = months[0];
-        // Only the halls this account can actually see, so a single mess gets a single column.
-        const halls = HALLS.filter(h => rows.some(r => r.data.hall === h));
-        const perHall = halls.length > 1;
+        const days = rs => new Set(rs.map(r => r.period)).size;
+        // A mess account only ever sees its own hall, so it gets no hall breakdown. The
+        // administrator sees many, and at this many halls the breakdown has to be rows:
+        // one column per hall was readable at four and is not at twenty-six.
+        const multi = HALLS.filter(h => rows.some(r => r.data.hall === h)).length > 1;
+
+        const monthly = {
+          head: ['Month', 'Days entered', ...(multi ? ['Halls reporting'] : []), 'Total, kg', 'Total, Tons'],
+          rows: months.map(m => {
+            const rs = byMonth[m];
+            const total = sumOf(rs, 'food_kg');
+            return [formatMonth(m), days(rs),
+              ...(multi ? [new Set(rs.map(r => r.data.hall)).size] : []),
+              fmt(total, 0), fmt(tons(total), 3)];
+          }),
+        };
+
+        // Every hall, including the ones that entered nothing — a blank row is the point,
+        // because it shows the administrator who still has to be chased.
+        const byHall = multi && latest ? {
+          caption: `By hall, ${formatMonth(latest)}`,
+          head: ['Hall', 'Days entered', 'Food waste, kg'],
+          rows: HALLS.map(h => {
+            const rs = byMonth[latest].filter(r => r.data.hall === h);
+            return rs.length ? [h, days(rs), fmt(sumOf(rs, 'food_kg'), 0)] : [h, '—', '—'];
+          }),
+        } : null;
+
         return {
           items: latest ? [
             { label: `Total, ${formatMonth(latest)}`, value: `${fmt(sumOf(byMonth[latest], 'food_kg'), 0)} kg` },
-            { label: 'Days entered that month', value: new Set(byMonth[latest].map(r => r.period)).size },
+            { label: 'Days entered that month', value: days(byMonth[latest]) },
+            ...(multi ? [{ label: 'Halls reporting that month', value: `${new Set(byMonth[latest].map(r => r.data.hall)).size} of ${HALLS.length}` }] : []),
           ] : [],
-          table: {
-            head: ['Month', 'Days entered', ...(perHall ? halls.map(h => `${h}, kg`) : []), 'Total, kg', 'Total, Tons'],
-            rows: months.map(m => {
-              const rs = byMonth[m];
-              const total = sumOf(rs, 'food_kg');
-              return [formatMonth(m), new Set(rs.map(r => r.period)).size,
-                ...(perHall ? halls.map(h => fmt(sumOf(rs.filter(r => r.data.hall === h), 'food_kg'), 0)) : []),
-                fmt(total, 0), fmt(tons(total), 3)];
-            }),
-          },
+          tables: byHall ? [monthly, byHall] : [monthly],
         };
       },
     },

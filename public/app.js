@@ -405,7 +405,22 @@
     return { cls: '', html: esc(s) };
   }
 
+  // How many entries the table draws at once. Twenty-six halls entering daily is about
+  // 9,500 rows a year, and a browser asked to lay out every one of them with two buttons
+  // each goes slow for no benefit — nobody scrolls a thousand rows. The summary, the
+  // report and the monthly roll-up are all still computed over every entry.
+  const SHOWN_ROWS = 200;
+
   function rowsTable(tableId, rows, ctx) {
+    const shown = rows.slice(0, SHOWN_ROWS);
+    const note = rows.length > SHOWN_ROWS
+      ? `<p class="card-note">Showing the ${SHOWN_ROWS} most recent of ${fmt(rows.length, 0)} entries.
+         The summary and the report below cover all of them. Use the report to get the rest.</p>`
+      : '';
+    return note + rowsTableHtml(tableId, shown, ctx);
+  }
+
+  function rowsTableHtml(tableId, rows, ctx) {
     const t = tables[tableId];
     const calcCols = t.calcCols || [];
     const locked = lockedField(t);                  // same value on every row, so not worth a column
@@ -440,14 +455,24 @@
     const t = tables[tableId];
     if (!t.summary || !rows.length) return '';
     const s = t.summary(rows, ctx);
-    if (!s || (!s.items?.length && !s.table?.rows?.length)) return '';
+    // A summary may return one `table` or several in `tables`, each with an optional caption.
+    const grids = summaryTables(s);
+    if (!s || (!s.items?.length && !grids.length)) return '';
     return `
       <div class="report">
         <div class="report-title">Report</div>
         ${s.items?.length ? `<div class="stats">${s.items.map(it => `<div class="stat ${it.flag ? 'flag' : ''}"><div class="v">${esc(it.value)}</div><div class="l">${esc(it.label)}</div></div>`).join('')}</div>` : ''}
-        ${s.table?.rows?.length ? `<div class="table-wrap"><table class="mini"><thead><tr>${s.table.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead>
-          <tbody>${s.table.rows.map(r => `<tr>${r.map(v => `<td>${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` : ''}
+        ${grids.map(g => `
+          ${g.caption ? `<div class="report-caption">${esc(g.caption)}</div>` : ''}
+          <div class="table-wrap"><table class="mini"><thead><tr>${g.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead>
+          <tbody>${g.rows.map(r => `<tr>${r.map(v => `<td>${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`).join('')}
       </div>`;
+  }
+
+  // Both shapes, in the order they should be drawn, with the empty ones dropped.
+  function summaryTables(s) {
+    if (!s) return [];
+    return (s.tables || (s.table ? [s.table] : [])).filter(g => g?.rows?.length);
   }
 
   // ---------- form ----------
