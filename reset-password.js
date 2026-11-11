@@ -7,12 +7,11 @@
 // This is the way back in when the administrator password has been lost: it needs
 // no sign-in, only the ability to run a command on the machine holding the database.
 // The account is asked to choose its own password at the next sign-in.
-const path = require('node:path');
 const fs = require('node:fs');
 const { DatabaseSync } = require('node:sqlite');
 const users = require('./users.js');
 
-const DB_FILE = path.join(__dirname, 'data', 'sdsi.db');
+const { DB_FILE } = require('./paths.js');
 if (!fs.existsSync(DB_FILE)) {
   console.error('\n  No database yet. Start the site once, then run this again.\n');
   process.exit(1);

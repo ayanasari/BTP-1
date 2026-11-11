@@ -7,12 +7,10 @@
 //
 // Every row it writes is marked as entered by "demo", so --clear can find them again and
 // nothing a real person typed is ever touched.
-const path = require('node:path');
 const fs = require('node:fs');
 const { DatabaseSync } = require('node:sqlite');
 
-const DATA_DIR = path.join(__dirname, 'data');
-const DB_FILE = path.join(DATA_DIR, 'sdsi.db');
+const { DATA_DIR, DB_FILE } = require('./paths.js');
 if (!fs.existsSync(DB_FILE)) {
   console.error('\n  No database yet. Start the site once (node server.js), then run this again.\n');
   process.exit(1);

@@ -7,18 +7,29 @@ const path = require('node:path');
 const { DatabaseSync } = require('node:sqlite');
 const SDSI = require('./public/schema.js');
 const users = require('./users.js');
+const { DATA_DIR, DB_FILE } = require('./paths.js');
+
+// Today's date in the server's own timezone, formatted the way the form sends it.
+//
+// It must NOT be `new Date().toISOString().slice(0, 10)`, which is the date in UTC. The
+// form in the browser opens on the LOCAL date, so in India — UTC+5:30 — every entry made
+// between midnight and 5:30 am would arrive looking like tomorrow and be refused as a
+// future date. Set TZ on the server if it is hosted outside India.
+const localToday = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
 const PORT = Number(process.env.PORT) || 4000;
 // All interfaces by default, so a campus machine serves everyone; HOST=127.0.0.1 to
 // keep it to the one computer.
 const HOST = process.env.HOST || '0.0.0.0';
 const PUBLIC_DIR = path.join(__dirname, 'public');
-const DATA_DIR = path.join(__dirname, 'data');
 const COOKIE = 'sdsi_session';
 const SCHEMA_VERSION = '2';
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
-const db = new DatabaseSync(path.join(DATA_DIR, 'sdsi.db'));
+const db = new DatabaseSync(DB_FILE);
 db.exec(`
   CREATE TABLE IF NOT EXISTS entries (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -153,7 +164,7 @@ function clean(user, tableId, period, data, selfId) {
     const [re, desc] = PERIOD_PATTERNS[table.period];
     cleanPeriod = String(period || '').trim();
     if (!re.test(cleanPeriod)) throw new HttpError(400, `${table.periodLabel || 'Period'} must be ${desc}`);
-    if (table.period === 'date' && cleanPeriod > new Date().toISOString().slice(0, 10)) {
+    if (table.period === 'date' && cleanPeriod > localToday()) {
       throw new HttpError(400, `${table.periodLabel || 'Date'} cannot be in the future.`);
     }
   }
@@ -266,6 +277,7 @@ async function handleApi(req, res, url, user, token) {
   if (p === '/api/me' && req.method === 'GET') {
     return sendJson(res, 200, { user: user ? publicUser(user) : null });
   }
+
 
   requireUser(user);
 
@@ -428,6 +440,16 @@ http.createServer(async (req, res) => {
   const token = cookies(req)[COOKIE];
   const user = users.userForToken(db, token);
   try {
+    // For a host's uptime check, so it must answer before the sign-in redirect below.
+    // It touches the database, so a 200 means the site is genuinely serving rather than
+    // merely that the process is alive. Nothing private in the answer.
+    if (url.pathname === '/healthz') {
+      try {
+        return sendJson(res, 200, { ok: true, entries: db.prepare('SELECT COUNT(*) c FROM entries').get().c });
+      } catch {
+        return sendJson(res, 503, { ok: false });
+      }
+    }
     if (url.pathname.startsWith('/api/')) return await handleApi(req, res, url, user, token);
     if (req.method !== 'GET') throw new HttpError(405, 'Method not allowed');
     // Signed out, every address lands on the sign-in page; signed in, that page is

@@ -180,10 +180,33 @@ HOST=127.0.0.1 node server.js
 In Windows PowerShell that is `$env:HOST="127.0.0.1"; node server.js`. Behind an HTTPS proxy, set
 `HTTPS=1` so the session cookie is marked `Secure`.
 
+### Putting it on a server
+
+A laptop is not a host: close the lid and the site is gone. **[DEPLOY.md](DEPLOY.md)** has
+step-by-step instructions for AlwaysData, a plain Linux server and Docker.
+
+Two things are needed wherever it goes — **Node 22.13+**, and a disk that survives restarts
+with `DATA_DIR` pointing at it:
+
+```
+DATA_DIR=/home/you/sdsi-data node server.js
+```
+
+Without that, the database sits inside the code folder, and the first deploy that replaces
+the code takes every entry with it.
+
+Set `TZ` too (`Asia/Kolkata`) if the server might be on another clock. The form opens on the
+browser's local date, and a server that thinks it is still yesterday refuses late-evening
+entries as future-dated.
+
+`/healthz` returns `{"ok":true,...}` for uptime checks.
+
 ### About the data
 
-- On the first start the site creates `data/sdsi.db` and loads the published list of treatment plants.
-- The database isn't uploaded to GitHub. Keep a copy of `data/sdsi.db` if you enter data you care about.
+- On the first start the site creates `sdsi.db` in the data folder and loads the published list of treatment plants.
+- The database isn't uploaded to GitHub. Keep a copy of `sdsi.db` if you enter data you care about.
+- `node backup.js` writes a dated copy into `backups/` and keeps the last 30. It is safe to run
+  while the site is in use. Run it nightly — see DEPLOY.md.
 - To start again from scratch, stop the server and delete the `data` folder. New passwords are then generated.
 - **Nothing waits for approval.** Eight divisions entering daily is a few hundred rows a month,
   and an administrator asked to approve every one would simply rubber-stamp them. Instead
@@ -208,6 +231,9 @@ In Windows PowerShell that is `$env:HOST="127.0.0.1"; node server.js`. Behind an
 - `public/app.js`, `public/styles.css`, `public/index.html`: the page.
 - `public/report.js`: builds the PDF reports, both per table and for the monthly summary.
 - `public/vendor/`: jsPDF and jsPDF-AutoTable (MIT licence, licence files included).
+- `paths.js`: where the database lives. Honours `DATA_DIR`; every tool agrees through this file.
+- `backup.js`: a dated copy of the database, keeping the most recent. Safe to run while the site is up.
+- `DEPLOY.md`, `Dockerfile`: putting it on a server.
 - `docs/`: the column specification taken from the SDSI site tables.
 
 ## Adding a hall or a plant
