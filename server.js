@@ -6,6 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { DatabaseSync } = require('node:sqlite');
 const SDSI = require('./public/schema.js');
+const TOPICS = require('./public/topics.js');
 const users = require('./users.js');
 const { DATA_DIR, DB_FILE } = require('./paths.js');
 
@@ -41,6 +42,16 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_entries_table ON entries(table_id);
   CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
+  -- The wording on the public page. One record per topic, edited by the administrator
+  -- from the site rather than by changing code. body is plain text; a blank line starts
+  -- a new paragraph. The topics themselves are fixed in public/topics.js.
+  CREATE TABLE IF NOT EXISTS pages (
+    slug TEXT PRIMARY KEY,
+    heading TEXT,
+    body TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by TEXT
+  );
 `);
 
 // Columns added after the first version of the portal.
@@ -300,8 +311,69 @@ async function handleApi(req, res, url, user, token) {
       rows[r.table_id].push({ period: r.period, data: JSON.parse(r.data) });
     }
     const view = SDSI.publicView({ rows, today: localToday() });
+
+    // The eight topics, with any wording the administrator has edited taking the place of
+    // the starting text. The topic list itself is fixed; only the words are editable.
+    const edited = {};
+    for (const r of db.prepare('SELECT slug, heading, body FROM pages').all()) edited[r.slug] = r;
+    view.topics = TOPICS.TOPICS.map(t => ({
+      slug: t.slug,
+      title: t.title,
+      short: t.short,
+      data: t.data || null,
+      stat: t.stat || null,
+      table: t.table || null,
+      heading: (edited[t.slug] && edited[t.slug].heading) || t.heading,
+      body: (edited[t.slug] && edited[t.slug].body != null && edited[t.slug].body !== '')
+        ? edited[t.slug].body : t.body,
+    }));
+
     res.setHeader('Cache-Control', 'public, max-age=300');
     return sendJson(res, 200, view);
+  }
+
+  // The wording on the public page. The administrator may change the words; the list of
+  // topics is fixed in code, so there is no way to add a section from here or to point
+  // one at data it should not show.
+  if (p === '/api/pages') {
+    if (!users.isAdmin(user)) throw new HttpError(403, 'Administrators only.');
+    if (req.method === 'GET') {
+      const edited = {};
+      for (const r of db.prepare('SELECT slug, heading, body, updated_at, updated_by FROM pages').all()) {
+        edited[r.slug] = r;
+      }
+      return sendJson(res, 200, {
+        pages: TOPICS.TOPICS.map(t => ({
+          slug: t.slug, title: t.title,
+          heading: (edited[t.slug] && edited[t.slug].heading) || t.heading,
+          body: (edited[t.slug] && edited[t.slug].body) || t.body,
+          defaultHeading: t.heading,
+          defaultBody: t.body,
+          edited: !!edited[t.slug],
+          updatedAt: edited[t.slug] ? edited[t.slug].updated_at : null,
+          updatedBy: edited[t.slug] ? edited[t.slug].updated_by : null,
+        })),
+      });
+    }
+    if (req.method === 'POST') {
+      const body = await readBody(req);
+      const topic = TOPICS.bySlug(String(body.slug || ''));
+      if (!topic) throw new HttpError(400, 'No such section.');
+      // Reset puts the starting text back by forgetting the edit.
+      if (body.action === 'reset') {
+        db.prepare('DELETE FROM pages WHERE slug = ?').run(topic.slug);
+        return sendJson(res, 200, { ok: true, heading: topic.heading, body: topic.body });
+      }
+      const heading = String(body.heading || '').trim().slice(0, 200);
+      const text = String(body.body || '').trim().slice(0, 20000);
+      if (!heading) throw new HttpError(400, 'Give the section a heading.');
+      db.prepare(`INSERT INTO pages (slug, heading, body, updated_at, updated_by)
+        VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?)
+        ON CONFLICT(slug) DO UPDATE SET heading = excluded.heading, body = excluded.body,
+          updated_at = CURRENT_TIMESTAMP, updated_by = excluded.updated_by`)
+        .run(topic.slug, heading, text, user.username);
+      return sendJson(res, 200, { ok: true });
+    }
   }
 
   if (p === '/api/login' && req.method === 'POST') {
@@ -475,7 +547,7 @@ function serveStatic(res, pathname) {
 // Reachable without signing in. The public page and what it needs to draw itself; the
 // figures behind it come from /api/public, which is handled separately.
 const OPEN_PAGES = new Set(['/login.html', '/styles.css', '/favicon.ico',
-  '/public.html', '/public.js']);
+  '/public.html', '/public.js', '/public.css']);
 
 const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',

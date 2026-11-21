@@ -148,6 +148,7 @@
     document.title = `${section.title} · SDSI Data Entry`;
     $main.innerHTML = `<div class="crumbs"><a href="#/">Home</a> › ${esc(cat.title)}</div><h1>${esc(section.title)}</h1><p class="empty">Loading…</p>`;
     if (section.recent) return drawRecent();
+    if (section.pages) return drawPages();
     try {
       current.rows = await api('GET', `/api/entries?tables=${section.tables.join(',')}`);
     } catch (err) {
@@ -748,6 +749,77 @@
     if (mins < 1440) return `${Math.round(mins / 60)} h ago`;
     return formatDate(d.toISOString().slice(0, 10));
   };
+
+  // ---------- the wording on the public page ----------
+  // Only the words. Which sections exist, and which figures each one shows, are fixed in
+  // the code — so nothing typed here can expose data the public should not see.
+  async function drawPages() {
+    let pages;
+    try { ({ pages } = await api('GET', '/api/pages')); }
+    catch (err) { $main.querySelector('.empty').textContent = err.message; return; }
+
+    $main.innerHTML = `
+      <div class="crumbs"><a href="#/">Home</a> › Administration</div>
+      <h1>Public page wording</h1>
+      <p class="intro">What visitors read on each section of the public page, at
+        <a href="/" target="_blank" rel="noopener">the front page</a>. Figures and tables
+        are not edited here — they come from the entries and from the institute's published
+        pages. Leave a blank line between paragraphs.</p>
+      ${pages.map(p => `
+        <section class="card" data-slug="${esc(p.slug)}">
+          <div class="card-head">
+            <h2>${esc(p.title)}</h2>
+            <span class="unit">${p.edited
+              ? `edited by ${esc(p.updatedBy || 'an administrator')}`
+              : 'starting text'}</span>
+          </div>
+          <form class="entry-form">
+            <div class="form-grid">
+              <div class="field wide">
+                <label for="h_${esc(p.slug)}">Heading</label>
+                <input id="h_${esc(p.slug)}" name="heading" value="${esc(p.heading)}" maxlength="200" required>
+              </div>
+              <div class="field wide">
+                <label for="b_${esc(p.slug)}">Paragraphs</label>
+                <textarea id="b_${esc(p.slug)}" name="body" rows="7" maxlength="20000">${esc(p.body)}</textarea>
+              </div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary">Save</button>
+              ${p.edited ? '<button type="button" class="btn-link danger" data-reset>Put the starting text back</button>' : ''}
+              <span class="saved" hidden>Saved</span>
+            </div>
+          </form>
+        </section>`).join('')}`;
+
+    $main.addEventListener('submit', async e => {
+      if (!e.target.matches('.card form')) return;
+      e.preventDefault();
+      const card = e.target.closest('.card');
+      const f = new FormData(e.target);
+      const btn = e.target.querySelector('button[type=submit]');
+      btn.disabled = true;
+      try {
+        await api('POST', '/api/pages', {
+          slug: card.dataset.slug, heading: f.get('heading'), body: f.get('body'),
+        });
+        const flag = e.target.querySelector('.saved');
+        flag.hidden = false;
+        setTimeout(() => { flag.hidden = true; }, 2500);
+      } catch (err) { toast(err.message); }
+      finally { btn.disabled = false; }
+    });
+
+    $main.addEventListener('click', async e => {
+      if (!e.target.matches('[data-reset]')) return;
+      const card = e.target.closest('.card');
+      if (!window.confirm('Put the starting text back for this section?')) return;
+      try {
+        await api('POST', '/api/pages', { slug: card.dataset.slug, action: 'reset' });
+        await drawPages();
+      } catch (err) { toast(err.message); }
+    });
+  }
 
   async function drawRecent() {
     const { cat, section } = current;

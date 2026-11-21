@@ -15,12 +15,17 @@ A website for entering and reporting IIT Kharagpur sustainability (SDSI) data. I
 
 Three levels.
 
-**Anyone, with no sign-in.** The front page shows the figures the institute publishes:
-solid waste by financial year with a chart, the treatment plants, and the latest water
-quality sample. Nothing else. The totals are added up **on the server** and only the
-finished tables are sent, so a visitor never receives a daily entry, a hall, a date finer
-than a financial year, or an account name. Everything else still redirects to the sign-in
-page.
+**Anyone, with no sign-in.** The front page covers the same eight topics the institute
+lists under Environmental Sustainability: solid waste, sewage, water, energy, emissions,
+procurement, education and research. Solid waste and sewage carry live figures from this
+portal; the rest carry the institute's own published figures. The totals are added up **on
+the server** and only the finished tables are sent, so a visitor never receives a daily
+entry, a hall, a date finer than a financial year, or an account name. Everything else
+still redirects to the sign-in page.
+
+The wording of every topic is edited from **Administration → Public page wording**. The
+list of topics, and which figures each one shows, are fixed in `public/topics.js` — only
+the words are editable, so nothing typed there can expose data it should not.
 
 Years before the portal started are the institute's own published figures, marked with an
 asterisk. A year the portal has entries for replaces the published row.

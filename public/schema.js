@@ -601,8 +601,8 @@
     const wasteTable = {
       // Short headings so all eight columns fit a laptop without sideways scrolling;
       // the units are stated once, above the table.
-      head: ['Financial Year', 'Total Solid Waste', 'Horticulture', 'Dry', 'Wet',
-        'Dry Recycled', 'Bio/Food Processed', 'Electronic Waste, Kg'],
+      head: ['Year', 'Total Solid Waste', 'Horticulture', 'Dry', 'Wet',
+        'Dry Recycled', 'Bio/Food Processed', 'E-waste, kg'],
       rows: byYear.map(y => [y.published ? `${y.fy} *` : y.fy,
         fmt(y.total, 2), fmt(y.horticulture, 2), fmt(y.dry, 2),
         fmt(y.wet, 2), fmt(y.recycled, 2), fmt(y.processed, 2), fmt(y.ewaste, 0)]),
@@ -711,6 +711,7 @@
       id: 'administration', title: 'Administration',
       sections: [
         { id: 'activity', title: 'Recent entries', recent: true, adminOnly: true, tables: [] },
+        { id: 'pages', title: 'Public page wording', pages: true, adminOnly: true, tables: [] },
       ],
     },
   ];

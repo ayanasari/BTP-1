@@ -1,0 +1,136 @@
+/* The public record of the campus's environmental figures.
+
+   It reads as a report, not as a product page: Georgia for the headings against the
+   system sans used for every number, a two-column rail on wide screens so the eight
+   topics are always in reach, and no decoration that is not carrying information.
+   No webfonts — the site makes no outbound connections, and that is worth keeping. */
+
+:root {
+  --ink: #16241c;
+  --paper: #fbfbf9;
+  --rule: #d9e0da;
+  --rule-soft: #eceee9;
+  --quiet: #5d6b63;
+  --seal: #14532d;
+  --accent: #1d6b43;
+  /* Chart hues: slots 1–3 of a categorical order validated for colour-blind
+     separation and contrast against this surface. */
+  --c1: #2a78d6;
+  --c2: #eb6834;
+  --c3: #1baf7a;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #e4ece6;
+    --paper: #11160f;
+    --rule: #2e3a31;
+    --rule-soft: #212a23;
+    --quiet: #9aaba0;
+    --accent: #6fd39b;
+    --c1: #3987e5; --c2: #d95926; --c3: #199e70;
+  }
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 { font-family: Georgia, "Iowan Old Style", "Times New Roman", serif; font-weight: 400; }
+
+.shell { max-width: 1140px; margin: 0 auto; padding: 0 28px; }
+
+/* ---------- masthead ---------- */
+.mast { border-bottom: 1px solid var(--rule); background: var(--seal); color: #eef6f1; }
+.mast .shell { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding-top: 15px; padding-bottom: 15px; }
+.mast b { font-weight: 600; font-size: 15px; letter-spacing: .01em; }
+.mast span { color: #a9c9b7; font-size: 13.5px; }
+.mast a {
+  color: #eef6f1; font-size: 13.5px; text-decoration: none;
+  border: 1px solid rgba(255,255,255,.28); border-radius: 6px; padding: 6px 14px;
+}
+.mast a:hover { background: rgba(255,255,255,.1); }
+.mast a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+/* ---------- opening: the index is the hero ---------- */
+.open { padding: 52px 0 40px; border-bottom: 1px solid var(--rule); }
+.open h1 { font-size: 40px; line-height: 1.12; margin: 0 0 14px; max-width: 16ch; }
+.open .say { margin: 0 0 36px; color: var(--quiet); font-size: 16px; max-width: 58ch; }
+
+.index { border-top: 1px solid var(--rule); }
+.index a {
+  display: grid; grid-template-columns: 1fr auto auto; align-items: baseline; gap: 20px;
+  padding: 13px 2px; border-bottom: 1px solid var(--rule-soft);
+  text-decoration: none; color: inherit;
+}
+.index a:hover { background: var(--rule-soft); }
+.index a:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.index .name { font-family: Georgia, serif; font-size: 18px; }
+.index .fig { font-variant-numeric: tabular-nums; font-size: 18px; font-weight: 600; }
+.index .cap { color: var(--quiet); font-size: 13px; min-width: 11ch; text-align: right; }
+
+/* ---------- body: rail + content ---------- */
+.body { display: grid; grid-template-columns: 184px 1fr; gap: 56px; padding: 40px 0 72px; align-items: start; }
+/* A grid column is auto-sized to its widest child unless told otherwise, so without this
+   a wide table pushes the whole page sideways instead of scrolling inside .wide. */
+.body > * { min-width: 0; }
+.rail { position: sticky; top: 26px; }
+.rail ol { list-style: none; margin: 0; padding: 0; }
+.rail li { margin: 0 0 1px; }
+.rail a {
+  display: block; padding: 6px 10px; font-size: 13.5px; color: var(--quiet);
+  text-decoration: none; border-left: 2px solid transparent; border-radius: 0 4px 4px 0;
+}
+.rail a:hover { color: var(--ink); background: var(--rule-soft); }
+.rail a.on { color: var(--ink); border-left-color: var(--accent); font-weight: 600; }
+.rail a:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+section.topic { scroll-margin-top: 24px; padding-bottom: 54px; }
+section.topic + section.topic { border-top: 1px solid var(--rule); padding-top: 42px; }
+section.topic h2 { font-size: 27px; margin: 0 0 16px; line-height: 1.2; }
+section.topic p { max-width: 68ch; margin: 0 0 14px; }
+
+/* ---------- figures ---------- */
+.band { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0; margin: 0 0 28px; border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
+.band div { padding: 15px 18px; border-right: 1px solid var(--rule); }
+.band div:last-child { border-right: 0; }
+.band .v { font-size: 25px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.band .l { font-size: 12.5px; color: var(--quiet); margin-top: 3px; }
+
+figure { margin: 0 0 26px; }
+figcaption { font-size: 12.5px; color: var(--quiet); margin-top: 10px; }
+
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+caption { text-align: left; font-size: 12.5px; color: var(--quiet); padding-bottom: 7px; }
+th, td { padding: 8px 12px; border-bottom: 1px solid var(--rule-soft); text-align: right; white-space: nowrap; }
+th { font-weight: 600; border-bottom: 1px solid var(--rule); }
+th:first-child, td:first-child { text-align: left; white-space: normal; }
+tbody tr:last-child td { border-bottom: 1px solid var(--rule); }
+.wide { overflow-x: auto; max-width: 100%; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 18px; margin: 0 0 14px; font-size: 13px; color: var(--quiet); }
+.legend span { display: inline-flex; align-items: center; gap: 7px; }
+.key { width: 10px; height: 10px; border-radius: 2px; }
+
+.foot { border-top: 1px solid var(--rule); padding: 24px 0 56px; color: var(--quiet); font-size: 13px; }
+.foot a { color: var(--accent); }
+.note { color: var(--quiet); font-size: 12.5px; margin-top: 10px; }
+.state { padding: 60px 0; color: var(--quiet); }
+
+@media (max-width: 880px) {
+  .shell { padding: 0 18px; }
+  .open { padding: 34px 0 28px; }
+  .open h1 { font-size: 30px; }
+  .body { grid-template-columns: 1fr; gap: 0; padding-top: 28px; }
+  .rail { display: none; }
+  .index a { grid-template-columns: 1fr auto; gap: 12px; }
+  .index .cap { display: none; }
+  section.topic h2 { font-size: 23px; }
+}
