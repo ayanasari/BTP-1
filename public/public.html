@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sustainability data · IIT Kharagpur</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%231d6b43'/><path d='M16 25c0-7 3-12 9-14 1 9-3 14-9 14z' fill='%238fcfa8'/><path d='M16 25c0-6-3-10-9-11 0 7 4 11 9 11z' fill='%23d9efe2'/></svg>">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Solid waste and sewage treatment figures for the IIT Kharagpur campus.">
+<link rel="stylesheet" href="/styles.css">
+<style>
+  /* Chart hues: slots 1–3 of the validated categorical order, stepped per mode.
+     Light mode's aqua sits just under 3:1 on white, which is why every series is
+     also named in the legend and repeated in the table below the chart. */
+  :root {
+    --c1: #2a78d6;  /* horticulture */
+    --c2: #eb6834;  /* dry */
+    --c3: #1baf7a;  /* wet */
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --c1: #3987e5; --c2: #d95926; --c3: #199e70; }
+  }
+
+  body { background: var(--bg); color: var(--text); margin: 0; }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 0 16px 64px; }
+
+  /* A fixed dark green, not --brand-strong: that token lightens in dark mode, which
+     would turn this banner pale with white text on it. */
+  .top { background: #14532d; color: #f4faf6; padding: 28px 0 30px; }
+  .top .wrap { padding-bottom: 0; display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; justify-content: space-between; }
+  .top h1 { margin: 0; font-size: 26px; line-height: 1.2; }
+  .top p { margin: 6px 0 0; font-size: 14px; color: #b9d9c6; }
+  .signin { color: #d9efe2; font-size: 13px; text-decoration: none; border: 1px solid #39694d; padding: 7px 13px; border-radius: 8px; white-space: nowrap; }
+  .signin:hover { background: #1d4731; }
+
+  h2 { font-size: 19px; margin: 36px 0 4px; }
+  .lede { margin: 0 0 14px; color: var(--muted); font-size: 14px; max-width: 70ch; }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-top: 24px; }
+  .tile { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; }
+  .tile .v { font-size: 27px; font-weight: 700; line-height: 1.1; letter-spacing: -.5px; }
+  .tile .l { font-size: 12.5px; color: var(--muted); margin-top: 5px; }
+  .tile .s { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 16px; margin: 0 0 12px; font-size: 13px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 7px; }
+  .swatch { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+
+  table.pub { border-collapse: collapse; width: 100%; font-size: 13px; }
+  table.pub th, table.pub td { border: 1px solid var(--border); padding: 7px 10px; text-align: right; white-space: nowrap; }
+  table.pub th { background: var(--surface-2); font-weight: 600; text-align: right; color: var(--text); }
+  table.pub th:first-child, table.pub td:first-child { text-align: left; }
+  table.pub tbody tr:nth-child(odd) { background: var(--surface-2); }
+  .scroll { overflow-x: auto; }
+
+  .foot { margin-top: 40px; padding-top: 18px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; }
+  .foot a { color: var(--brand); }
+  .loading, .failed { padding: 40px 0; color: var(--muted); }
+  .failed { color: var(--danger); }
+  @media (max-width: 560px) { .top h1 { font-size: 21px; } .tile .v { font-size: 23px; } }
+</style>
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <div>
+        <h1>Campus sustainability data</h1>
+        <p>Indian Institute of Technology Kharagpur</p>
+      </div>
+      <a class="signin" href="/login.html">Staff sign in</a>
+    </div>
+  </header>
+  <main class="wrap" id="main">
+    <p class="loading">Loading the figures…</p>
+  </main>
+  <script src="/public.js"></script>
+</body>
+</html>

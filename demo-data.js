@@ -11,6 +11,7 @@ const fs = require('node:fs');
 const { DatabaseSync } = require('node:sqlite');
 
 const { DATA_DIR, DB_FILE } = require('./paths.js');
+const SDSI = require('./public/schema.js');   // for the ISO-week helper
 if (!fs.existsSync(DB_FILE)) {
   console.error('\n  No database yet. Start the site once (node server.js), then run this again.\n');
   process.exit(1);
@@ -82,10 +83,13 @@ for (let d = DAYS; d >= 1; d--) {
 
   add('dry_waste', day, { dry_kg: near(sunday ? 620 : 840, 240) });
 
-  add('horticulture_waste', day, {
-    leaves_kg: near(215, 110),
-    other_kg: near(95, 65),
-    composted_kg: near(150, 70),
+  // Horticulture is weighed once a week now, so one entry per week rather than per day.
+  // add() skips a period that already exists, so writing it on every day of the week
+  // leaves exactly one row per week with the whole week's clearing in it.
+  add('horticulture_waste', SDSI.helpers.isoWeekOf(day), {
+    leaves_kg: near(1500, 600),
+    other_kg: near(660, 300),
+    composted_kg: near(1050, 400),
   });
 
   add('waste_processed', day, {
@@ -139,10 +143,11 @@ for (let d = DAYS; d >= 1; d--) {
   }
 }
 
-add('ewaste_disposal', dayBack(Math.min(DAYS, 24)), {
+// E-waste goes out in occasional lots, recorded by the week it was handed over.
+add('ewaste_disposal', SDSI.helpers.isoWeekOf(dayBack(Math.min(DAYS, 24))), {
   description: 'CRT monitors and keyboards cleared from Nalanda complex', qty_kg: 148, vendor: 'EcoReco Recycling',
 }, true);
-add('ewaste_disposal', dayBack(Math.min(DAYS, 5)), {
+add('ewaste_disposal', SDSI.helpers.isoWeekOf(dayBack(Math.min(DAYS, 5))), {
   description: 'Dead UPS batteries from the Hall of Residence stores', qty_kg: 62, vendor: 'EcoReco Recycling',
 }, false);
 

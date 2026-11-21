@@ -7,7 +7,7 @@
   const $toast = document.getElementById('toast');
   const $menuBtn = document.getElementById('menuBtn');
 
-  const PERIOD_LABEL = { month: 'Month', fy: 'Financial year', year: 'Year', date: 'Date' };
+  const PERIOD_LABEL = { month: 'Month', fy: 'Financial year', year: 'Year', date: 'Date', week: 'Week' };
   const openCats = new Set(loadOpenCats());
   let current = null; // { section, rows: {tableId: [...]}, editing: {tableId, id|null} }
   let me = null;      // the signed-in account
@@ -67,6 +67,7 @@
     if (type === 'fy') { const [y] = currentFy().split('-').map(Number); return fyOfMonth(`${y - 1}-04`); }
     if (type === 'year') return String(d.getFullYear());
     if (type === 'date') return toISO(new Date()); // daily entry starts on today
+    if (type === 'week') return SDSI.helpers.isoWeekOf(toISO(new Date())); // this week
     return '';
   }
   function fyOptions() {
@@ -157,10 +158,11 @@
     // there is nothing to click before entering. Not if today is already filled in,
     // which would only greet someone with a duplicate-entry error.
     const only = section.tables.length === 1 ? section.tables[0] : null;
-    if (only && tables[only].period === 'date' && !section.overview) {
-      const today = toISO(new Date());
-      const doneToday = (current.rows[only] || []).some(r => r.period === today);
-      if (!doneToday) current.editing = { tableId: only, id: null };
+    const cadence = only && tables[only].period;
+    if (only && (cadence === 'date' || cadence === 'week') && !section.overview) {
+      const now = defaultPeriod(cadence);
+      const alreadyDone = (current.rows[only] || []).some(r => r.period === now);
+      if (!alreadyDone) current.editing = { tableId: only, id: null };
     }
     drawSection();
   }
@@ -496,6 +498,12 @@
     if (t.period === 'month') return `<input type="month" ${base} value="${esc(v)}">`;
     if (t.period === 'fy') return `<select ${base}>${fyOptions().map(o => `<option ${o === v ? 'selected' : ''}>${o}</option>`).join('')}</select>`;
     if (t.period === 'year') return `<input type="number" min="1950" max="2100" step="1" ${base} value="${esc(v)}">`;
+    // The browser's week picker shows a calendar, so the person picks the days they
+    // cleared rather than having to know which week number it is.
+    if (t.period === 'week') {
+      return `<input type="week" ${base} value="${esc(v)}" max="${esc(defaultPeriod('week'))}">
+        <p class="unit">${esc(SDSI.helpers.formatPeriod('week', v))}</p>`;
+    }
     return `<input type="date" ${base} value="${esc(v)}">`;
   }
 

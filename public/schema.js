@@ -18,7 +18,46 @@
     return `${start}-${String((start + 1) % 100).padStart(2, '0')}`;
   };
   const byKeyDesc = obj => Object.keys(obj).sort().reverse();
-  const monthOf = r => (r.period || '').slice(0, 7);
+
+  // ---------- ISO weeks ----------
+  // Horticulture and e-waste are weighed once a week rather than daily, so those entries
+  // are stored as an ISO week, '2026-W47', which is also what <input type="week"> gives.
+  // ISO 8601: weeks run Monday to Sunday, and a week belongs to the year containing its
+  // Thursday — so the first days of January can fall in week 52 or 53 of the year before.
+  const isoDow = d => d.getUTCDay() || 7;          // Monday 1 … Sunday 7
+  const utc = s => new Date(`${s}T00:00:00Z`);
+  const isoDate = d => d.toISOString().slice(0, 10);
+  const addDays = (d, n) => new Date(d.getTime() + n * 86400000);
+
+  // The Monday of ISO week w of year y.
+  function weekStart(y, w) {
+    const jan4 = new Date(Date.UTC(y, 0, 4));
+    const week1Monday = addDays(jan4, 1 - isoDow(jan4));
+    return addDays(week1Monday, (w - 1) * 7);
+  }
+  // '2026-03-11' -> '2026-W11'
+  function isoWeekOf(dateStr) {
+    const d = utc(dateStr);
+    const thursday = addDays(d, 4 - isoDow(d));    // the week's Thursday decides the year
+    const y = thursday.getUTCFullYear();
+    const w = Math.round((thursday - weekStart(y, 1)) / (7 * 86400000)) + 1;
+    return `${y}-W${String(w).padStart(2, '0')}`;
+  }
+  const weekParts = p => { const m = /^(\d{4})-W(\d{2})$/.exec(p || ''); return m && { y: +m[1], w: +m[2] }; };
+
+  // A week can straddle two months, so it is counted in the month holding its Thursday —
+  // the same majority rule ISO uses to assign a week to a year.
+  function monthOfWeek(p) {
+    const q = weekParts(p);
+    if (!q) return '';
+    return isoDate(addDays(weekStart(q.y, q.w), 3)).slice(0, 7);
+  }
+
+  // The month an entry counts towards, whether it was entered by date, month or week.
+  const monthOf = r => {
+    const p = r.period || '';
+    return p.includes('W') ? monthOfWeek(p) : p.slice(0, 7);
+  };
   // First and last day ('YYYY-MM-DD') covered by a period value of the given type.
   const periodRange = (type, p) => {
     if (!p) return null;
@@ -29,6 +68,12 @@
     }
     if (type === 'fy') { const y = Number(p.slice(0, 4)); return [`${y}-04-01`, `${y + 1}-03-31`]; }
     if (type === 'year') return [`${p}-01-01`, `${p}-12-31`];
+    if (type === 'week') {
+      const q = weekParts(p);
+      if (!q) return null;
+      const mon = weekStart(q.y, q.w);
+      return [isoDate(mon), isoDate(addDays(mon, 6))];
+    }
     return [p, p];
   };
   // Does an entry fall inside [from, to]? Tables with no date are standing lists.
@@ -56,6 +101,16 @@
     if (!p) return '—';
     if (type === 'month') { const [y, m] = p.split('-'); return `${MONTHS[+m - 1]} ${y}`; }
     if (type === 'date') return formatDate(p);
+    // A bare 'W47' means nothing to the person weighing the leaves, so the dates are shown.
+    if (type === 'week') {
+      const span = periodRange('week', p);
+      if (!span) return p;
+      const [a, b] = span.map(d => utc(d));
+      const sameMonth = a.getUTCMonth() === b.getUTCMonth();
+      const sameYear = a.getUTCFullYear() === b.getUTCFullYear();
+      const from = `${a.getUTCDate()}${sameMonth ? '' : ' ' + MONTHS[a.getUTCMonth()]}${sameYear ? '' : ' ' + a.getUTCFullYear()}`;
+      return `${from} – ${b.getUTCDate()} ${MONTHS[b.getUTCMonth()]} ${b.getUTCFullYear()}`;
+    }
     return p;
   };
   const formatMonth = m => formatPeriod('month', m);
@@ -171,8 +226,11 @@
 
     horticulture_waste: {
       title: 'Horticulture waste',
-      period: 'date',
-      periodLabel: 'Date',
+      // Weighed once a week, not daily: the grounds staff clear and weigh leaves across
+      // several days, so a weekly figure is both easier to give and more honest than
+      // pretending each day was measured separately.
+      period: 'week',
+      periodLabel: 'Week',
       unique: ['period'],
       fields: [
         { key: 'leaves_kg', label: 'Dry leaves', unit: 'kg', type: 'number' },
@@ -266,15 +324,19 @@
 
     ewaste_disposal: {
       title: 'Electronic waste handed over',
-      period: 'date',
-      periodLabel: 'Date',
+      // Recorded by the week it was handed over. Lots go out every few weeks rather than
+      // daily, and the published figure is a yearly total, so the week is precise enough.
+      period: 'week',
+      periodLabel: 'Week',
       fields: [
         { key: 'description', label: 'Items', type: 'text', required: true },
         { key: 'qty_kg', label: 'Quantity', unit: 'kg', type: 'number', required: true },
         { key: 'vendor', label: 'Authorised vendor', type: 'text' },
       ],
       summary(rows) {
-        const byFy = groupBy(rows.filter(r => r.period), r => fyOfMonth(r.period.slice(0, 7)));
+        // monthOf, not a slice: these periods are weeks now, and a week that straddles
+        // two months counts in the one holding its Thursday.
+        const byFy = groupBy(rows.filter(r => r.period), r => fyOfMonth(monthOf(r)));
         return {
           items: [{ label: 'Total handed over', value: `${fmt(sumOf(rows, 'qty_kg'), 0)} kg` }],
           table: {
@@ -462,6 +524,167 @@
     },
   };
 
+  // ---------- figures the institute already publishes ----------
+  // Copied from iitkgp.ac.in/solid-waste-management and /sewage-treatment-and-cleanliness-
+  // initiatives. They are history: the portal did not collect them, and nobody enters them
+  // here. They sit on the public page so it is continuous with what the institute already
+  // reports, and a year the portal has its own entries for replaces the published row.
+  //
+  // NOTE on "Total Solid Waste": on the institute's table the total is dry + wet and
+  // EXCLUDES horticulture waste, in all three years. That is their definition, so the
+  // public page follows it. Confirm with SDSI before changing it — our own monthly
+  // summary adds horticulture in, so the two will not agree until this is settled.
+  const PUBLISHED_WASTE = [
+    // fy,        total,  horticulture, dry,  wet, recycled, processed, ewaste kg
+    ['2024-25', 298.00, 620.00, 225.00, 73.00, 2.50, 6.00, 4230],
+    ['2023-24', 247.00, 650.00, 215.00, 32.00, 1.50, 5.50, 3964],
+    ['2022-23', 222.00, 638.00, 180.00, 42.00, 4.00, 4.80, 3686],
+  ].map(([fy, total, horticulture, dry, wet, recycled, processed, ewaste]) =>
+    ({ fy, total, horticulture, dry, wet, recycled, processed, ewaste, published: true }));
+
+  // The inlet/outlet sample published for the 1.35 MLD plant. The institute gives no
+  // sampling date, so none is shown.
+  const PUBLISHED_LAB = {
+    plant: 'STP-1 (1.35 MLD)',
+    rows: [
+      ['pH', '—', '6.9', '7.5', '5.5 to 9.0'],
+      ['COD', 'mg/L', '567', '5', '50'],
+      ['BOD3 at 27 °C', 'mg/L', '121', '3', '10'],
+      ['TSS', 'mg/L', '156', '10', '20'],
+    ],
+  };
+
+  // ---------- the public page ----------
+  // What anyone may see without signing in. It mirrors the figures the institute already
+  // publishes on its Solid Waste Management and Sewage Treatment pages, so the shape is
+  // theirs: financial years, tonnes, and the plant list with capacities in MLD.
+  //
+  // This runs ON THE SERVER and returns only finished totals. No daily entry, no hall
+  // breakdown, no account name and no date finer than a financial year ever leaves the
+  // building through it — which is the whole reason the rollup is not done in the browser
+  // the way the administrator's summary is.
+  function publicView(ctx) {
+    const waste = ['mess_waste', 'dry_waste', 'horticulture_waste', 'waste_processed',
+      'recyclables_sold', 'ewaste_disposal'];
+    const rowsOf = id => ctx.rows[id] || [];
+    const fyOfRow = r => fyOfMonth(monthOf(r));
+    const inFy = (id, fy) => rowsOf(id).filter(r => r.period && fyOfRow(r) === fy);
+
+    const years = new Set();
+    waste.forEach(id => rowsOf(id).forEach(r => { if (r.period) years.add(fyOfRow(r)); }));
+    const list = [...years].sort().reverse();
+
+    const entered = list.map(fy => {
+      const food = sumOf(inFy('mess_waste', fy), 'food_kg');
+      const wet = food;   // see the monthly rollup: campus bin collection is added here later
+      const dry = sumOf(inFy('dry_waste', fy), 'dry_kg');
+      const hort = add(...inFy('horticulture_waste', fy).map(r => tables.horticulture_waste.calc(r).total_kg));
+      return {
+        fy,
+        // The institute's definition: dry plus wet, with horticulture reported alongside
+        // rather than inside it. See the note on PUBLISHED_WASTE.
+        total: tons(add(dry, wet)),
+        horticulture: tons(hort), dry: tons(dry), wet: tons(wet),
+        recycled: tons(sumOf(inFy('recyclables_sold', fy), 'qty_kg')),
+        processed: tons(sumOf(inFy('waste_processed', fy), 'input_kg')),
+        ewaste: sumOf(inFy('ewaste_disposal', fy), 'qty_kg'),
+      };
+    });
+
+    // The portal's own figures win for a year it covers; published history fills the rest.
+    const covered = new Set(entered.map(r => r.fy));
+    const byYear = entered
+      .concat(PUBLISHED_WASTE.filter(p => !covered.has(p.fy)))
+      .sort((a, b) => b.fy.localeCompare(a.fy));
+
+    // Column order follows the institute's own published table.
+    const wasteTable = {
+      // Short headings so all eight columns fit a laptop without sideways scrolling;
+      // the units are stated once, above the table.
+      head: ['Financial Year', 'Total Solid Waste', 'Horticulture', 'Dry', 'Wet',
+        'Dry Recycled', 'Bio/Food Processed', 'Electronic Waste, Kg'],
+      rows: byYear.map(y => [y.published ? `${y.fy} *` : y.fy,
+        fmt(y.total, 2), fmt(y.horticulture, 2), fmt(y.dry, 2),
+        fmt(y.wet, 2), fmt(y.recycled, 2), fmt(y.processed, 2), fmt(y.ewaste, 0)]),
+      note: byYear.some(y => y.published)
+        ? '* Published by the institute for years before this portal began recording.'
+        : null,
+    };
+
+    // Oldest first, because a chart reads left to right through time.
+    const chron = [...byYear].reverse();
+    const chart = {
+      labels: chron.map(y => y.fy),
+      stack: [
+        { name: 'Horticulture', values: chron.map(y => y.horticulture || 0) },
+        { name: 'Dry', values: chron.map(y => y.dry || 0) },
+        { name: 'Wet', values: chron.map(y => y.wet || 0) },
+      ],
+      // The label above each bar is the height of the bar — all three types added up —
+      // NOT the institute's "Total Solid Waste", which leaves horticulture out. A bar
+      // labelled with a number smaller than itself would be a chart that lies.
+      totals: chron.map(y => add(y.horticulture, y.dry, y.wet) || 0),
+      recovered: chron.map(y => add(y.recycled, y.processed) || 0),
+    };
+
+    const plants = rowsOf('stp_plants').map(r => r.data);
+    const capacity = add(...plants.map(p => num(p.capacity_mld)));
+
+    // The most recent lab sample from the plant that is sampled most often — the same
+    // inlet/outlet comparison against the NGT limits the institute publishes.
+    const lab = rowsOf('stp_lab').filter(r => r.period);
+    const mainPlant = Object.entries(groupBy(lab, r => r.data.plant || '—'))
+      .sort((a, b) => b[1].length - a[1].length)[0];
+    const newest = mainPlant
+      ? mainPlant[1].slice().sort((a, b) => b.period.localeCompare(a.period))[0]
+      : null;
+    const L = tables.stp_lab.limits;
+    const labRows = !newest ? [] : [
+      ['pH', '—', 'ph', `${L.ph[0]} to ${L.ph[1]}`],
+      ['COD', 'mg/L', 'cod', `${L.cod}`],
+      ['BOD3 at 27 °C', 'mg/L', 'bod', `${L.bod}`],
+      ['TSS', 'mg/L', 'tss', `${L.tss}`],
+    ].map(([label, unit, key, limit]) => [label, unit,
+      fmt(num(newest.data[`${key}_in`]), 2), fmt(num(newest.data[`${key}_out`]), 2), limit]);
+
+    // "Figures up to" — the last day any entry covers. A week in progress ends in the
+    // future, so it is capped at today; otherwise the page would claim to hold figures
+    // for days that have not happened.
+    const today = ctx.today || new Date().toISOString().slice(0, 10);
+    const allDated = waste.concat(['stp_daily', 'stp_lab'])
+      .flatMap(id => rowsOf(id).map(r => periodRange(tables[id].period, r.period)))
+      .filter(Boolean).map(s => (s[1] > today ? today : s[1])).sort();
+
+    return {
+      updated: allDated.length ? formatDate(allDated[allDated.length - 1]) : null,
+      waste: wasteTable,
+      chart,
+      latestYear: byYear[0] || null,
+      plants: {
+        head: ['Description', 'Year of commissioning', 'Capacity, MLD'],
+        rows: plants
+          .slice()
+          .sort((a, b) => num(b.capacity_mld) - num(a.capacity_mld))
+          .map(p => [p.description, p.year_commissioned || '—', fmt(num(p.capacity_mld), 3)]),
+        capacity,
+      },
+      // A sample entered through the portal if there is one; otherwise the figures the
+      // institute publishes, which carry no sampling date.
+      lab: labRows.length ? {
+        head: ['Parameter', 'Unit', 'Inlet', 'Outlet', 'Regulatory limit, NGT 2018'],
+        plant: mainPlant[0],
+        sampled: formatDate(newest.period),
+        rows: labRows,
+      } : {
+        head: ['Parameter', 'Unit', 'Inlet', 'Outlet', 'Regulatory limit, NGT 2018'],
+        plant: PUBLISHED_LAB.plant,
+        sampled: null,
+        published: true,
+        rows: PUBLISHED_LAB.rows,
+      },
+    };
+  }
+
   // ---------- navigation: major categories > subsections > tables ----------
   const categories = [
     {
@@ -493,9 +716,10 @@
   ];
 
   const SDSI = {
-    tables, categories, overviews,
+    tables, categories, overviews, publicView,
     lists: { HALLS, PLANTS, MATERIALS, FACILITIES },
-    helpers: { num, add, fmt, tons, fyOfMonth, periodRange, inRange, isDated, formatDate, formatPeriod, monthOf },
+    helpers: { num, add, fmt, tons, fyOfMonth, periodRange, inRange, isDated, formatDate, formatPeriod, monthOf,
+      isoWeekOf, monthOfWeek, weekStart },
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = SDSI;
   else root.SDSI = SDSI;

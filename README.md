@@ -11,6 +11,41 @@ A website for entering and reporting IIT Kharagpur sustainability (SDSI) data. I
 - **PDF reports per table:** the last N days, months or years, a custom date range, or all
   entries, with every column, its dates, calculated values and a summary.
 
+## Who sees what
+
+Three levels.
+
+**Anyone, with no sign-in.** The front page shows the figures the institute publishes:
+solid waste by financial year with a chart, the treatment plants, and the latest water
+quality sample. Nothing else. The totals are added up **on the server** and only the
+finished tables are sent, so a visitor never receives a daily entry, a hall, a date finer
+than a financial year, or an account name. Everything else still redirects to the sign-in
+page.
+
+Years before the portal started are the institute's own published figures, marked with an
+asterisk. A year the portal has entries for replaces the published row.
+
+> One thing to settle with SDSI: on the institute's published table, **Total Solid Waste is
+> dry plus wet and leaves horticulture out** — in all three years. The public page follows
+> their definition. The administrator's monthly summary adds horticulture in, so the two
+> will not agree until somebody decides which is right.
+
+**A division, signed in.** Its own section, its own figures, nothing else.
+
+**The administrator, signed in.** Everything, plus who entered what and the reports.
+
+## How often each thing is entered
+
+| Entered | Tables |
+| --- | --- |
+| Every day | mess food waste, dry waste, organic waste processing, daily plant log |
+| Every week | horticulture waste, electronic waste handed over |
+| Per event | recyclables sold, laboratory readings |
+
+Weekly entries are stored as an ISO week (`2026-W47`) and the form shows a week picker with
+the dates spelled out. A week that straddles two months is counted in the month holding its
+Thursday, the same rule ISO uses for years.
+
 ## The 31 accounts
 
 People sign in with **either their email or the short username** — whichever they find easier

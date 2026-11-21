@@ -92,6 +92,31 @@ for (const [from, to] of Object.entries(users.RENAMED)) {
   }
 }
 
+// Horticulture and e-waste used to be entered daily and are now entered weekly. Any row
+// still carrying a date is moved to the week containing that date, because a date-shaped
+// period in a weekly table would never match the form and could not be edited again.
+// Where several days fall in one week the first is kept and the rest are left alone, so
+// nothing is silently added up or thrown away — the administrator can merge them by hand.
+for (const tableId of ['horticulture_waste', 'ewaste_disposal']) {
+  if (SDSI.tables[tableId]?.period !== 'week') continue;
+  const dated = db.prepare(
+    `SELECT id, period FROM entries WHERE table_id = ? AND period LIKE '____-__-__'`).all(tableId);
+  if (!dated.length) continue;
+  const used = new Set(db.prepare(
+    `SELECT period FROM entries WHERE table_id = ? AND period LIKE '%W%'`).all(tableId).map(r => r.period));
+  const move = db.prepare('UPDATE entries SET period = ? WHERE id = ?');
+  let moved = 0, clashed = 0;
+  for (const row of dated) {
+    const week = SDSI.helpers.isoWeekOf(row.period);
+    if (used.has(week)) { clashed++; continue; }
+    used.add(week);
+    move.run(week, row.id);
+    moved++;
+  }
+  if (moved) console.log(`  ${moved} ${tableId} entr${moved === 1 ? 'y' : 'ies'} moved from a date to its week.`);
+  if (clashed) console.log(`  ${clashed} left on a date because that week was already taken — merge them by hand.`);
+}
+
 // A scoped account can only enter rows whose scopeField equals its scope, so a scope that
 // is not one of the choices on the form means that account can enter nothing at all. That
 // is silent at runtime and maddening to debug, so it stops the server here instead.
@@ -116,6 +141,7 @@ const PERIOD_PATTERNS = {
   fy: [/^\d{4}-\d{2}$/, 'a financial year like 2024-25'],
   year: [/^\d{4}$/, 'a year like 2025'],
   date: [/^\d{4}-\d{2}-\d{2}$/, 'a date'],
+  week: [/^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/, 'a week'],
 };
 
 class HttpError extends Error {
@@ -166,6 +192,14 @@ function clean(user, tableId, period, data, selfId) {
     if (!re.test(cleanPeriod)) throw new HttpError(400, `${table.periodLabel || 'Period'} must be ${desc}`);
     if (table.period === 'date' && cleanPeriod > localToday()) {
       throw new HttpError(400, `${table.periodLabel || 'Date'} cannot be in the future.`);
+    }
+    // A week is only enterable once it has started; the week in progress is allowed,
+    // because the leaves are weighed as they are cleared rather than on Sunday night.
+    if (table.period === 'week') {
+      const span = SDSI.helpers.periodRange('week', cleanPeriod);
+      if (!span || span[0] > localToday()) {
+        throw new HttpError(400, `${table.periodLabel || 'Week'} has not started yet.`);
+      }
     }
   }
 
@@ -252,6 +286,23 @@ const setCookie = token =>
 // ---------- API ----------
 async function handleApi(req, res, url, user, token) {
   const p = url.pathname;
+
+  // The only route that answers without a session. It reads every entry and returns
+  // nothing but finished totals — financial-year tonnages, the plant list, and the latest
+  // lab sample against the NGT limits. The rollup happens here rather than in the browser
+  // precisely so that no daily figure, hall or account name is ever sent to a stranger.
+  if (p === '/api/public' && req.method === 'GET') {
+    const known = Object.keys(SDSI.tables);
+    const marks = known.map(() => '?').join(',');
+    const rows = {};
+    known.forEach(id => { rows[id] = []; });
+    for (const r of db.prepare(`SELECT table_id, period, data FROM entries WHERE table_id IN (${marks})`).all(...known)) {
+      rows[r.table_id].push({ period: r.period, data: JSON.parse(r.data) });
+    }
+    const view = SDSI.publicView({ rows, today: localToday() });
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    return sendJson(res, 200, view);
+  }
 
   if (p === '/api/login' && req.method === 'POST') {
     const body = await readBody(req);
@@ -421,7 +472,10 @@ function serveStatic(res, pathname) {
 }
 
 // Files anyone may fetch before signing in: the sign-in page and what it needs to draw.
-const OPEN_PAGES = new Set(['/login.html', '/styles.css', '/favicon.ico']);
+// Reachable without signing in. The public page and what it needs to draw itself; the
+// figures behind it come from /api/public, which is handled separately.
+const OPEN_PAGES = new Set(['/login.html', '/styles.css', '/favicon.ico',
+  '/public.html', '/public.js']);
 
 const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
@@ -452,8 +506,13 @@ http.createServer(async (req, res) => {
     }
     if (url.pathname.startsWith('/api/')) return await handleApi(req, res, url, user, token);
     if (req.method !== 'GET') throw new HttpError(405, 'Method not allowed');
-    // Signed out, every address lands on the sign-in page; signed in, that page is
-    // pointless, so it bounces to the site.
+    // The front door shows the published figures to anyone who arrives. Signed in, the
+    // same address is the data entry site, so staff do not have to go anywhere else.
+    if (!user && (url.pathname === '/' || url.pathname === '/index.html')) {
+      return serveStatic(res, '/public.html');
+    }
+    // Every other address still needs a sign-in; signed in, the sign-in page is pointless,
+    // so it bounces to the site.
     if (!user && !OPEN_PAGES.has(url.pathname)) {
       res.writeHead(302, { ...SECURITY_HEADERS, Location: '/login.html', 'Cache-Control': 'no-store' });
       return res.end();
