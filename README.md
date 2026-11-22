@@ -1,5 +1,9 @@
 # BTP 1: SDSI Data Entry Portal
 
+> **Picking this project up?** Read **[HANDOVER.md](HANDOVER.md)** first — where it runs,
+> how to deploy, what is still open, and the traps that have already cost time.
+> Then [DEPLOY.md](DEPLOY.md) for the server.
+
 A website for entering and reporting IIT Kharagpur sustainability (SDSI) data. It covers
 **solid waste** and **sewage treatment**, following the tables published on the
 [SDSI pages](https://www.iitkgp.ac.in/navpage/sdsi).
