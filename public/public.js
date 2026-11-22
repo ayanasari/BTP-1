@@ -16,6 +16,17 @@
     { key: 'Wet', css: 'var(--c3)' },
   ];
 
+  // Tonnes once there are tonnes to show, kilograms before that. A year that has only
+  // just started can hold a few kilos, and rounding five kilograms to "0 tons" reads as
+  // "nothing has been recorded" when something has. Returns the number and its unit.
+  function mass(tons) {
+    const t = n(tons);
+    if (!isFinite(t) || t === 0) return ['—', 'tons'];
+    if (t < 1) return [inr(t * 1000, 0), 'kg'];
+    const shown = inr(t, t < 10 ? 1 : 0);
+    return [shown, shown === '1' ? 'ton' : 'tons'];
+  }
+
   const paras = text => String(text || '').split(/\n{2,}/)
     .filter(s => s.trim()).map(s => `<p>${esc(s.trim())}</p>`).join('');
 
@@ -84,7 +95,8 @@
   // The figure shown beside a topic in the index.
   function headline(t, d) {
     if (t.data === 'waste' && d.latestYear) {
-      return [inr(n(d.latestYear.total), 0), `tons · ${d.latestYear.fy}`];
+      const [v, unit] = mass(d.latestYear.total);
+      return [v, `${unit} · ${d.latestYear.fy}`];
     }
     if (t.data === 'sewage') return [inr(d.plants.capacity, 3), 'MLD treated'];
     if (t.stat) return [t.stat.value, t.stat.label];
@@ -97,7 +109,8 @@
       const y = d.latestYear;
       const rec = y ? n(y.recycled) + n(y.processed) : null;
       figures = band([
-        [y ? inr(n(y.total), 0) : '—', `Total solid waste, tons · ${y ? y.fy : ''}`],
+        ...(() => { const [v, unit] = y ? mass(y.total) : ['—', 'tons'];
+          return [[v, `Total solid waste, ${unit} · ${y ? y.fy : ''}`]]; })(),
         [y && n(y.total) ? inr((rec / n(y.total)) * 100, 0) + '%' : '—', 'Recycled or processed'],
         [y ? inr(n(y.ewaste), 0) : '—', 'Electronic waste, kg'],
       ]) + chart(d.chart) + grid(d.waste, 'Tons, except electronic waste in kilograms')
