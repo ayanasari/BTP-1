@@ -542,6 +542,24 @@
   ].map(([fy, total, horticulture, dry, wet, recycled, processed, ewaste]) =>
     ({ fy, total, horticulture, dry, wet, recycled, processed, ewaste, published: true }));
 
+  // The institute's own breakdown by waste type, as printed on its page. These are
+  // measured estimates, not arithmetic on the annual totals — and they do not reconcile
+  // with them: 2,000 kg/day of wet waste is about 730 tons a year, where the annual table
+  // gives 32 tons of wet waste for the same year. Both are reproduced as published; which
+  // is right is a question for SDSI.
+  const PUBLISHED_PER_TYPE = {
+    caption: 'Estimated amount and type of waste generated, as published by the institute',
+    head: ['Type of waste', '2023-24', '2022-23', '2021-22'],
+    rows: [
+      ['Wet waste, kg/day', '2,000', '1,200', '1,150'],
+      ['Dry leaves, kg/day', '500', '300', '290'],
+      ['Cartons, kg/month', '240', '127', '125'],
+      ['Iron scrap, kg/month', '150', '118', '115'],
+      ['Plastics, kg/month', '72', '50', '45'],
+      ['Total recycled and reused', '2,516', '1,510', '1,450'],
+    ],
+  };
+
   // The inlet/outlet sample published for the 1.35 MLD plant. The institute gives no
   // sampling date, so none is shown.
   const PUBLISHED_LAB = {
@@ -611,22 +629,7 @@
         : null,
     };
 
-    // The same year broken down per day and per month, the way the institute presents it
-    // alongside the annual table. These are DERIVED from the annual tonnages above by
-    // dividing by 365 and 12 — the portal does not hold a separate daily average, and
-    // inventing one would be worse than saying where this came from.
     const head = byYear.find(y => num(y.total) > 0) || byYear[0];
-    const perDay = !head ? null : {
-      head: ['Waste type', 'kg per day', 'kg per month', 'Tons per year'],
-      rows: [
-        ['Horticulture', head.horticulture],
-        ['Dry', head.dry],
-        ['Wet', head.wet],
-      ].filter(([, t]) => num(t) > 0).map(([label, t]) => [
-        label, fmt(num(t) * 1000 / 365, 0), fmt(num(t) * 1000 / 12, 0), fmt(num(t), 2),
-      ]),
-      caption: head ? `Averages for ${head.fy}, worked out from the annual totals` : null,
-    };
 
     // Oldest first, because a chart reads left to right through time.
     const chron = [...byYear].reverse();
@@ -685,7 +688,7 @@
       // horticulture entered has no total yet, and picking it would put a blank where
       // the headline should be.
       latestYear: head || null,
-      perDay,
+      perType: PUBLISHED_PER_TYPE,
       plants: {
         head: ['Description', 'Year of commissioning', 'Capacity, MLD'],
         rows: plants

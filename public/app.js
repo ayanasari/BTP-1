@@ -753,9 +753,11 @@
   // ---------- the wording on the public page ----------
   // Only the words. Which sections exist, and which figures each one shows, are fixed in
   // the code — so nothing typed here can expose data the public should not see.
+  let pagesBound = false;
+
   async function drawPages() {
-    let pages;
-    try { ({ pages } = await api('GET', '/api/pages')); }
+    let pages, maxPhotos, maxPhotoMb;
+    try { ({ pages, maxPhotos, maxPhotoMb } = await api('GET', '/api/pages')); }
     catch (err) { $main.querySelector('.empty').textContent = err.message; return; }
 
     $main.innerHTML = `
@@ -791,7 +793,31 @@
               <span class="saved" hidden>Saved</span>
             </div>
           </form>
+
+          <div class="shots">
+            <h3>Photographs<span class="unit"> ${p.photos.length} of ${maxPhotos}</span></h3>
+            ${p.photos.length ? `<div class="shot-row">${p.photos.map(ph => `
+              <figure class="shot">
+                <img src="${esc(ph.src)}" alt="${esc(ph.caption || 'Photograph')}" loading="lazy">
+                <input class="cap" data-id="${ph.id}" value="${esc(ph.caption)}"
+                  placeholder="Caption" maxlength="200">
+                <button type="button" class="btn-link danger" data-remove="${ph.id}">Remove</button>
+              </figure>`).join('')}</div>`
+              : '<p class="card-note">No photographs yet. A drawing is shown until you add one.</p>'}
+            ${p.photos.length < maxPhotos ? `
+              <label class="add-shot">
+                <input type="file" accept="image/jpeg,image/png,image/webp" data-upload hidden>
+                <span class="btn">Add a photograph</span>
+                <span class="unit">JPEG, PNG or WebP, under ${maxPhotoMb} MB</span>
+              </label>` : ''}
+          </div>
         </section>`).join('')}`;
+
+    // These listeners sit on $main, which survives the re-render, while drawPages runs
+    // again after every save and upload. Without this guard each pass adds another copy
+    // and one click uploads the same picture twice.
+    if (pagesBound) return;
+    pagesBound = true;
 
     $main.addEventListener('submit', async e => {
       if (!e.target.matches('.card form')) return;
@@ -812,13 +838,57 @@
     });
 
     $main.addEventListener('click', async e => {
-      if (!e.target.matches('[data-reset]')) return;
       const card = e.target.closest('.card');
-      if (!window.confirm('Put the starting text back for this section?')) return;
-      try {
-        await api('POST', '/api/pages', { slug: card.dataset.slug, action: 'reset' });
-        await drawPages();
-      } catch (err) { toast(err.message); }
+      if (!card) return;
+      if (e.target.matches('[data-reset]')) {
+        if (!window.confirm('Put the starting text back for this section?')) return;
+        try {
+          await api('POST', '/api/pages', { slug: card.dataset.slug, action: 'reset' });
+          await drawPages();
+        } catch (err) { toast(err.message); }
+      }
+      if (e.target.matches('[data-remove]')) {
+        if (!window.confirm('Remove this photograph from the public page?')) return;
+        try {
+          await api('POST', '/api/photos', {
+            slug: card.dataset.slug, action: 'remove', id: Number(e.target.dataset.remove),
+          });
+          await drawPages();
+        } catch (err) { toast(err.message); }
+      }
+    });
+
+    // Upload. The file is read in the browser and sent base64 inside the usual JSON, so
+    // there is no multipart parser on the server to get wrong.
+    $main.addEventListener('change', async e => {
+      if (e.target.matches('[data-upload]')) {
+        const card = e.target.closest('.card');
+        const file = e.target.files[0];
+        if (!file) return;
+        const label = e.target.closest('.add-shot').querySelector('.btn');
+        const was = label.textContent;
+        label.textContent = 'Uploading…';
+        try {
+          const data = await new Promise((resolve, reject) => {
+            const r = new FileReader();
+            r.onload = () => resolve(String(r.result));
+            r.onerror = () => reject(new Error('That file could not be read.'));
+            r.readAsDataURL(file);
+          });
+          await api('POST', '/api/photos', { slug: card.dataset.slug, data });
+          await drawPages();
+        } catch (err) { toast(err.message); label.textContent = was; }
+        return;
+      }
+      if (e.target.matches('.cap')) {
+        const card = e.target.closest('.card');
+        try {
+          await api('POST', '/api/photos', {
+            slug: card.dataset.slug, action: 'caption',
+            id: Number(e.target.dataset.id), caption: e.target.value,
+          });
+        } catch (err) { toast(err.message); }
+      }
     });
   }
 

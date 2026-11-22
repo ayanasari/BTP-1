@@ -127,6 +127,17 @@ section.topic p { max-width: 68ch; margin: 0 0 14px; }
 figure { margin: 0 0 26px; }
 figcaption { font-size: 12.5px; color: var(--quiet); margin-top: 10px; }
 
+/* Photographs. Two or three across, cropped to a common shape so a row of pictures
+   taken on different phones still lines up. */
+.shots { display: grid; gap: 14px; margin: 0 0 28px; }
+.shots-2, .shots-3 { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+.shots figure { margin: 0; }
+.shots img {
+  width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block;
+  border-radius: 10px; background: var(--rule-soft);
+}
+.shots figcaption { margin-top: 8px; }
+
 table { border-collapse: collapse; width: 100%; font-size: 13.5px; font-variant-numeric: tabular-nums; }
 caption { text-align: left; font-size: 12.5px; color: var(--quiet); padding-bottom: 7px; }
 th, td { padding: 8px 12px; border-bottom: 1px solid var(--rule-soft); text-align: right; white-space: nowrap; }

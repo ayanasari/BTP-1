@@ -4,11 +4,12 @@ const http = require('node:http');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const { DatabaseSync } = require('node:sqlite');
 const SDSI = require('./public/schema.js');
 const TOPICS = require('./public/topics.js');
 const users = require('./users.js');
-const { DATA_DIR, DB_FILE } = require('./paths.js');
+const { DATA_DIR, DB_FILE, PHOTO_DIR } = require('./paths.js');
 
 // Today's date in the server's own timezone, formatted the way the form sends it.
 //
@@ -29,6 +30,7 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const COOKIE = 'sdsi_session';
 const SCHEMA_VERSION = '2';
 fs.mkdirSync(DATA_DIR, { recursive: true });
+fs.mkdirSync(PHOTO_DIR, { recursive: true });
 
 const db = new DatabaseSync(DB_FILE);
 db.exec(`
@@ -45,6 +47,19 @@ db.exec(`
   -- The wording on the public page. One record per topic, edited by the administrator
   -- from the site rather than by changing code. body is plain text; a blank line starts
   -- a new paragraph. The topics themselves are fixed in public/topics.js.
+  -- Photographs shown on the public page, one row per picture. The file itself lives in
+  -- DATA_DIR/photos, never in the code directory, so a deploy cannot wipe them and a
+  -- git pull cannot overwrite them.
+  CREATE TABLE IF NOT EXISTS photos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug TEXT NOT NULL,
+    file TEXT NOT NULL,
+    caption TEXT NOT NULL DEFAULT '',
+    sort INTEGER NOT NULL DEFAULT 0,
+    added_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    added_by TEXT
+  );
+  CREATE INDEX IF NOT EXISTS photos_slug ON photos (slug, sort, id);
   CREATE TABLE IF NOT EXISTS pages (
     slug TEXT PRIMARY KEY,
     heading TEXT,
@@ -256,12 +271,15 @@ function clean(user, tableId, period, data, selfId) {
 }
 
 // ---------- request plumbing ----------
-function readBody(req) {
+// `max` is the most text the body may run to. Ordinary forms get 1 MB; a photograph
+// arrives base64-encoded, which is about a third larger than the file, so that route
+// asks for more rather than every route carrying the bigger limit.
+function readBody(req, max = 1e6) {
   return new Promise((resolve, reject) => {
     let body = '';
     req.on('data', chunk => {
       body += chunk;
-      if (body.length > 1e6) { reject(new HttpError(413, 'Request too large')); req.destroy(); }
+      if (body.length > max) { reject(new HttpError(413, 'Request too large')); req.destroy(); }
     });
     req.on('end', () => {
       try { resolve(body ? JSON.parse(body) : {}); } catch { reject(new HttpError(400, 'Invalid JSON')); }
@@ -323,7 +341,12 @@ async function handleApi(req, res, url, user, token) {
     // the starting text. The topic list itself is fixed; only the words are editable.
     const edited = {};
     for (const r of db.prepare('SELECT slug, heading, body FROM pages').all()) edited[r.slug] = r;
+    const shots = {};
+    for (const r of db.prepare('SELECT slug, file, caption FROM photos ORDER BY sort, id').all()) {
+      (shots[r.slug] = shots[r.slug] || []).push({ src: `/photo/${r.file}`, caption: r.caption });
+    }
     view.topics = TOPICS.TOPICS.map(t => ({
+      photos: shots[t.slug] || [],
       slug: t.slug,
       title: t.title,
       short: t.short,
@@ -342,6 +365,56 @@ async function handleApi(req, res, url, user, token) {
     return sendJson(res, 200, view);
   }
 
+  if (p === '/api/photos') {
+    if (!users.isAdmin(user)) throw new HttpError(403, 'Administrators only.');
+
+    if (req.method === 'POST') {
+      const body = await readBody(req, Math.ceil(MAX_PHOTO_BYTES * 1.4) + 4096);
+      const topic = TOPICS.bySlug(String(body.slug || ''));
+      if (!topic) throw new HttpError(400, 'No such section.');
+
+      if (body.action === 'remove') {
+        const row = db.prepare('SELECT file FROM photos WHERE id = ? AND slug = ?')
+          .get(Number(body.id), topic.slug);
+        if (!row) throw new HttpError(404, 'No such photograph.');
+        db.prepare('DELETE FROM photos WHERE id = ?').run(Number(body.id));
+        try { fs.unlinkSync(path.join(PHOTO_DIR, row.file)); } catch { /* already gone */ }
+        return sendJson(res, 200, { ok: true });
+      }
+
+      if (body.action === 'caption') {
+        db.prepare('UPDATE photos SET caption = ? WHERE id = ? AND slug = ?')
+          .run(String(body.caption || '').trim().slice(0, 200), Number(body.id), topic.slug);
+        return sendJson(res, 200, { ok: true });
+      }
+
+      // An upload. The picture arrives base64-encoded in JSON; what it actually is is
+      // decided by its first bytes, not by the name or the type the browser claimed.
+      const count = db.prepare('SELECT COUNT(*) AS n FROM photos WHERE slug = ?').get(topic.slug).n;
+      if (count >= MAX_PHOTOS) {
+        throw new HttpError(400, `That section already has ${MAX_PHOTOS} photographs. Remove one first.`);
+      }
+      const b64 = String(body.data || '').replace(/^data:[^,]*,/, '');
+      if (!b64) throw new HttpError(400, 'No picture was sent.');
+      let bytes;
+      try { bytes = Buffer.from(b64, 'base64'); } catch { throw new HttpError(400, 'That file could not be read.'); }
+      if (!bytes.length) throw new HttpError(400, 'That file is empty.');
+      if (bytes.length > MAX_PHOTO_BYTES) {
+        throw new HttpError(400, `Pictures must be under ${Math.round(MAX_PHOTO_BYTES / 1e6)} MB. Shrink it and try again.`);
+      }
+      const kind = sniffImage(bytes);
+      if (!kind) {
+        throw new HttpError(400, 'That is not a JPEG, PNG or WebP. SVG is not accepted, because it can carry scripts.');
+      }
+      const name = `${topic.slug}-${crypto.createHash('sha256').update(bytes).digest('hex').slice(0, 16)}.${kind}`;
+      fs.writeFileSync(path.join(PHOTO_DIR, name), bytes);
+      db.prepare(`INSERT INTO photos (slug, file, caption, sort, added_by)
+        VALUES (?, ?, ?, ?, ?)`)
+        .run(topic.slug, name, String(body.caption || '').trim().slice(0, 200), count, user.username);
+      return sendJson(res, 201, { ok: true, file: name });
+    }
+  }
+
   // The wording on the public page. The administrator may change the words; the list of
   // topics is fixed in code, so there is no way to add a section from here or to point
   // one at data it should not show.
@@ -352,8 +425,15 @@ async function handleApi(req, res, url, user, token) {
       for (const r of db.prepare('SELECT slug, heading, body, updated_at, updated_by FROM pages').all()) {
         edited[r.slug] = r;
       }
+      const shots = {};
+      for (const r of db.prepare('SELECT id, slug, file, caption FROM photos ORDER BY sort, id').all()) {
+        (shots[r.slug] = shots[r.slug] || []).push({ id: r.id, src: `/photo/${r.file}`, caption: r.caption });
+      }
       return sendJson(res, 200, {
+        maxPhotos: MAX_PHOTOS,
+        maxPhotoMb: Math.round(MAX_PHOTO_BYTES / 1e6),
         pages: TOPICS.TOPICS.map(t => ({
+          photos: shots[t.slug] || [],
           slug: t.slug, title: t.title,
           heading: (edited[t.slug] && edited[t.slug].heading) || t.heading,
           body: (edited[t.slug] && edited[t.slug].body) || t.body,
@@ -556,6 +636,42 @@ function serveStatic(res, pathname) {
 // Files anyone may fetch before signing in: the sign-in page and what it needs to draw.
 // Reachable without signing in. The public page and what it needs to draw itself; the
 // figures behind it come from /api/public, which is handled separately.
+// Photographs. JPEG, PNG and WebP only — never SVG, which is a document that can carry
+// script and would run on the site's own origin. The format is decided by the file's
+// first bytes, so renaming a file does not get it in.
+const PHOTO_TYPES = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
+const MAX_PHOTO_BYTES = 3_000_000;
+const MAX_PHOTOS = 6;
+
+// A photograph, to anyone. The name is looked up in the database rather than joined on
+// to a directory, so "../../sdsi.db" simply finds no row.
+function servePhoto(req, res, pathname) {
+  if (req.method !== 'GET') throw new HttpError(405, 'Method not allowed');
+  const name = decodeURIComponent(pathname.slice('/photo/'.length));
+  const row = db.prepare('SELECT file FROM photos WHERE file = ?').get(name);
+  if (!row) throw new HttpError(404, 'No such photograph.');
+  let data;
+  try { data = fs.readFileSync(path.join(PHOTO_DIR, row.file)); }
+  catch { throw new HttpError(404, 'No such photograph.'); }
+  res.writeHead(200, {
+    'Content-Type': PHOTO_TYPES[path.extname(row.file).slice(1)] || 'application/octet-stream',
+    'Content-Length': data.length,
+    // The name carries a hash of the bytes, so a given name never changes content.
+    'Cache-Control': 'public, max-age=31536000, immutable',
+    'X-Content-Type-Options': 'nosniff',
+    'Content-Disposition': 'inline',
+  });
+  res.end(data);
+}
+
+function sniffImage(b) {
+  if (b.length > 3 && b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF) return 'jpg';
+  if (b.length > 8 && b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]))) return 'png';
+  if (b.length > 12 && b.subarray(0, 4).toString('latin1') === 'RIFF'
+    && b.subarray(8, 12).toString('latin1') === 'WEBP') return 'webp';
+  return null;
+}
+
 const OPEN_PAGES = new Set(['/login.html', '/styles.css', '/favicon.ico',
   '/public.html', '/public.js', '/public.css', '/illustrations.js']);
 
@@ -587,6 +703,10 @@ http.createServer(async (req, res) => {
       }
     }
     if (url.pathname.startsWith('/api/')) return await handleApi(req, res, url, user, token);
+    // Photographs belong to the public page, so they are served before the sign-in gate
+    // and outside the static file handler — the name is looked up in the database, so a
+    // request cannot reach a file the page does not reference.
+    if (url.pathname.startsWith('/photo/')) return servePhoto(req, res, url.pathname);
     if (req.method !== 'GET') throw new HttpError(405, 'Method not allowed');
     // The front door shows the published figures to anyone who arrives. Signed in, the
     // same address is the data entry site, so staff do not have to go anywhere else.

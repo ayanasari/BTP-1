@@ -21,4 +21,7 @@ module.exports = {
   DATA_DIR,
   DB_FILE: path.join(DATA_DIR, 'sdsi.db'),
   BACKUP_DIR: path.join(DATA_DIR, 'backups'),
+  // Photographs for the public page. Here rather than in the code directory for the same
+  // reason as the database: a deploy must not be able to delete them.
+  PHOTO_DIR: path.join(DATA_DIR, 'photos'),
 };

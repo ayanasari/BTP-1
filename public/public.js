@@ -115,7 +115,7 @@
         [y ? inr(n(y.ewaste), 0) : '—', 'Electronic waste, kg'],
       ]) + chart(d.chart) + grid(d.waste, 'Tons, except electronic waste in kilograms')
         + (d.waste.note ? `<p class="note">${esc(d.waste.note)}</p>` : '')
-        + (d.perDay && d.perDay.rows.length ? grid(d.perDay, d.perDay.caption) : '');
+        + (d.perType ? grid(d.perType, d.perType.caption) : '');
     } else if (t.data === 'sewage') {
       figures = band([
         [inr(d.plants.capacity, 3), 'MLD treatment capacity'],
@@ -128,12 +128,19 @@
     } else if (t.table) {
       figures = grid(t.table, t.table.caption);
     }
-    const art = (window.SDSI_ILL && window.SDSI_ILL.for(t.slug)) || '';
+    // A photograph beats a drawing; the drawing is what stands in until there is one.
+    const shots = t.photos || [];
+    const art = shots.length ? '' : ((window.SDSI_ILL && window.SDSI_ILL.for(t.slug)) || '');
     return `<section class="topic" id="${esc(t.slug)}">
       <div class="head">
         <div><h2>${esc(t.heading)}</h2>${paras(t.body)}</div>
         ${art ? `<div class="art">${art}</div>` : ''}
       </div>
+      ${shots.length ? `<div class="shots shots-${Math.min(shots.length, 3)}">${shots.map(s => `
+        <figure>
+          <img src="${esc(s.src)}" alt="${esc(s.caption || t.title)}" loading="lazy" decoding="async">
+          ${s.caption ? `<figcaption>${esc(s.caption)}</figcaption>` : ''}
+        </figure>`).join('')}</div>` : ''}
       ${figures}
     </section>`;
   }
