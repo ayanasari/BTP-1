@@ -83,7 +83,9 @@
 
   // The figure shown beside a topic in the index.
   function headline(t, d) {
-    if (t.data === 'waste' && d.latestYear) return [inr(n(d.latestYear.total), 0), 'tons a year'];
+    if (t.data === 'waste' && d.latestYear) {
+      return [inr(n(d.latestYear.total), 0), `tons · ${d.latestYear.fy}`];
+    }
     if (t.data === 'sewage') return [inr(d.plants.capacity, 3), 'MLD treated'];
     if (t.stat) return [t.stat.value, t.stat.label];
     return ['', ''];

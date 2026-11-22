@@ -659,7 +659,11 @@
       updated: allDated.length ? formatDate(allDated[allDated.length - 1]) : null,
       waste: wasteTable,
       chart,
-      latestYear: byYear[0] || null,
+      // The headline figures come from the most recent year that actually has figures.
+      // A financial year begins in April with nothing in it, and a row of zeros tells a
+      // visitor nothing except that the page looks broken — last year's real total is
+      // the more honest answer, and every tile is labelled with the year it came from.
+      latestYear: byYear.find(y => num(y.total) > 0 || num(y.horticulture) > 0) || byYear[0] || null,
       plants: {
         head: ['Description', 'Year of commissioning', 'Capacity, MLD'],
         rows: plants
