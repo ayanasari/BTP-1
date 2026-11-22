@@ -761,8 +761,9 @@
     $main.innerHTML = `
       <div class="crumbs"><a href="#/">Home</a> › Administration</div>
       <h1>Public page wording</h1>
-      <p class="intro">What visitors read on each section of the public page, at
-        <a href="/" target="_blank" rel="noopener">the front page</a>. Figures and tables
+      <p class="intro">What visitors read on each section of
+        <a href="/public.html" target="_blank" rel="noopener">the public page</a>.
+        Figures and tables
         are not edited here — they come from the entries and from the institute's published
         pages. Leave a blank line between paragraphs.</p>
       ${pages.map(p => `
