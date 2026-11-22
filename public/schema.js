@@ -556,7 +556,8 @@
       ['Cartons, kg/month', '240', '127', '125'],
       ['Iron scrap, kg/month', '150', '118', '115'],
       ['Plastics, kg/month', '72', '50', '45'],
-      ['Total recycled and reused', '2,516', '1,510', '1,450'],
+      ['Total recycled and reused, kg/day', '2,516', '1,510', '1,450'],
+      ['Total recycled and reused, kg/year', '9,05,760', '5,43,600', '5,22,000'],
     ],
   };
 

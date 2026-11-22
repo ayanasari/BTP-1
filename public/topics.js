@@ -113,8 +113,12 @@
       slug: 'procurement',
       title: 'Sustainable procurement',
       short: 'Procurement',
+      stat: { value: 'GeM', label: 'and CPP portal' },
       heading: 'Sustainable procurement and purchasing policy',
-      body: 'This section has not been written yet. An administrator can add it from the portal.',
+      body: [
+        'As an Institute of Eminence funded by the Government of India, the institute buys under central government rules: the General Financial Rules 2017 and the procurement manuals for goods, consultancy and works. Anything available on the Government e-Marketplace is bid there; anything else is tendered on the institute website and the Central Public Procurement portal.',
+        'Four commitments shape what gets bought. Renewable generation is expanded and purchased electricity reduced through bioenergy, wind and solar. New hostels get high-efficiency heat pumps, which use a third of the energy of conventional water heaters. Cooking, a major source of campus emissions, moves towards solar cookers and solar water heating. And ISI, BEE, GRIHA and Ecomark labels are written into tender specifications wherever they can be.',
+      ].join('\n\n'),
     },
     {
       slug: 'education',
