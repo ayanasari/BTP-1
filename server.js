@@ -328,7 +328,10 @@ async function handleApi(req, res, url, user, token) {
         ? edited[t.slug].body : t.body,
     }));
 
-    res.setHeader('Cache-Control', 'public, max-age=300');
+    // Short on purpose. Five minutes made a correct deploy look like a broken one:
+    // the figures change at most once a day, but whoever just changed them reloads
+    // immediately and needs to see it.
+    res.setHeader('Cache-Control', 'public, max-age=30');
     return sendJson(res, 200, view);
   }
 
