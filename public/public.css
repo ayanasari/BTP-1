@@ -62,7 +62,23 @@ h1, h2, h3 { font-family: Georgia, "Iowan Old Style", "Times New Roman", serif; 
 /* ---------- opening: the index is the hero ---------- */
 .open { padding: 52px 0 40px; border-bottom: 1px solid var(--rule); }
 .open h1 { font-size: 40px; line-height: 1.12; margin: 0 0 14px; max-width: 16ch; }
-.open .say { margin: 0 0 36px; color: var(--quiet); font-size: 16px; max-width: 58ch; }
+.open .say { margin: 0; color: var(--quiet); font-size: 16px; max-width: 54ch; }
+.hero { display: grid; grid-template-columns: 1fr 340px; gap: 40px; align-items: center; margin-bottom: 36px; }
+.hero-art svg { width: 100%; height: auto; display: block; }
+
+/* The drawings. Three tones from the page's own palette so they sit with the type
+   instead of shouting over it, and one set that works in both themes. */
+:root { --ill-1: #1d6b43; --ill-2: #8cc9a7; --ill-3: #e8b04b; --ill-line: #16241c; }
+@media (prefers-color-scheme: dark) {
+  :root { --ill-1: #2f7f55; --ill-2: #5ea97d; --ill-3: #d9a84b; --ill-line: #cfe0d5; }
+}
+.ill { width: 100%; height: auto; display: block; }
+
+.flag {
+  margin: 0 0 28px; padding: 11px 15px; font-size: 13.5px; color: var(--ink);
+  background: var(--rule-soft); border-left: 3px solid var(--c2); border-radius: 0 6px 6px 0;
+  max-width: 68ch;
+}
 
 .index { border-top: 1px solid var(--rule); }
 .index a {
@@ -96,6 +112,10 @@ section.topic { scroll-margin-top: 24px; padding-bottom: 54px; }
 section.topic + section.topic { border-top: 1px solid var(--rule); padding-top: 42px; }
 section.topic h2 { font-size: 27px; margin: 0 0 16px; line-height: 1.2; }
 section.topic p { max-width: 68ch; margin: 0 0 14px; }
+.head { display: grid; grid-template-columns: 1fr 190px; gap: 32px; align-items: start; margin-bottom: 26px; }
+.head > * { min-width: 0; }
+.head p:last-child { margin-bottom: 0; }
+.art { padding-top: 4px; }
 
 /* ---------- figures ---------- */
 .band { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0; margin: 0 0 28px; border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
@@ -133,4 +153,8 @@ tbody tr:last-child td { border-bottom: 1px solid var(--rule); }
   .index a { grid-template-columns: 1fr auto; gap: 12px; }
   .index .cap { display: none; }
   section.topic h2 { font-size: 23px; }
+  .hero { grid-template-columns: 1fr; gap: 24px; }
+  .hero-art { max-width: 300px; }
+  .head { grid-template-columns: 1fr; gap: 18px; }
+  .art { max-width: 220px; }
 }

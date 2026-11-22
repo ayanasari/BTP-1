@@ -611,6 +611,23 @@
         : null,
     };
 
+    // The same year broken down per day and per month, the way the institute presents it
+    // alongside the annual table. These are DERIVED from the annual tonnages above by
+    // dividing by 365 and 12 — the portal does not hold a separate daily average, and
+    // inventing one would be worse than saying where this came from.
+    const head = byYear.find(y => num(y.total) > 0) || byYear[0];
+    const perDay = !head ? null : {
+      head: ['Waste type', 'kg per day', 'kg per month', 'Tons per year'],
+      rows: [
+        ['Horticulture', head.horticulture],
+        ['Dry', head.dry],
+        ['Wet', head.wet],
+      ].filter(([, t]) => num(t) > 0).map(([label, t]) => [
+        label, fmt(num(t) * 1000 / 365, 0), fmt(num(t) * 1000 / 12, 0), fmt(num(t), 2),
+      ]),
+      caption: head ? `Averages for ${head.fy}, worked out from the annual totals` : null,
+    };
+
     // Oldest first, because a chart reads left to right through time.
     const chron = [...byYear].reverse();
     const chart = {
@@ -667,7 +684,8 @@
       // The test is the total itself, not "any figure at all": a year with only
       // horticulture entered has no total yet, and picking it would put a blank where
       // the headline should be.
-      latestYear: byYear.find(y => num(y.total) > 0) || byYear[0] || null,
+      latestYear: head || null,
+      perDay,
       plants: {
         head: ['Description', 'Year of commissioning', 'Capacity, MLD'],
         rows: plants

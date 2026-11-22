@@ -312,6 +312,13 @@ async function handleApi(req, res, url, user, token) {
     }
     const view = SDSI.publicView({ rows, today: localToday() });
 
+    // demo-data.js marks everything it writes as entered by "demo". While any of it is
+    // present the public page says so, because this page is reachable by anyone and
+    // invented tonnages that look official are the kind of thing that gets quoted.
+    // `node demo-data.js --clear` removes the rows and the notice goes with them.
+    view.demo = !!db.prepare("SELECT 1 FROM entries WHERE created_by = 'demo' LIMIT 1").get();
+
+
     // The eight topics, with any wording the administrator has edited taking the place of
     // the starting text. The topic list itself is fixed; only the words are editable.
     const edited = {};
@@ -550,7 +557,7 @@ function serveStatic(res, pathname) {
 // Reachable without signing in. The public page and what it needs to draw itself; the
 // figures behind it come from /api/public, which is handled separately.
 const OPEN_PAGES = new Set(['/login.html', '/styles.css', '/favicon.ico',
-  '/public.html', '/public.js', '/public.css']);
+  '/public.html', '/public.js', '/public.css', '/illustrations.js']);
 
 const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',

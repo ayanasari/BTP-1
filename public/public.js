@@ -114,7 +114,8 @@
         [y && n(y.total) ? inr((rec / n(y.total)) * 100, 0) + '%' : '—', 'Recycled or processed'],
         [y ? inr(n(y.ewaste), 0) : '—', 'Electronic waste, kg'],
       ]) + chart(d.chart) + grid(d.waste, 'Tons, except electronic waste in kilograms')
-        + (d.waste.note ? `<p class="note">${esc(d.waste.note)}</p>` : '');
+        + (d.waste.note ? `<p class="note">${esc(d.waste.note)}</p>` : '')
+        + (d.perDay && d.perDay.rows.length ? grid(d.perDay, d.perDay.caption) : '');
     } else if (t.data === 'sewage') {
       figures = band([
         [inr(d.plants.capacity, 3), 'MLD treatment capacity'],
@@ -127,9 +128,12 @@
     } else if (t.table) {
       figures = grid(t.table, t.table.caption);
     }
+    const art = (window.SDSI_ILL && window.SDSI_ILL.for(t.slug)) || '';
     return `<section class="topic" id="${esc(t.slug)}">
-      <h2>${esc(t.heading)}</h2>
-      ${paras(t.body)}
+      <div class="head">
+        <div><h2>${esc(t.heading)}</h2>${paras(t.body)}</div>
+        ${art ? `<div class="art">${art}</div>` : ''}
+      </div>
       ${figures}
     </section>`;
   }
@@ -138,9 +142,16 @@
     const topics = d.topics || [];
     document.getElementById('main').innerHTML = `
       <div class="open"><div class="shell">
-        <h1>What the campus uses, and what it throws away</h1>
-        <p class="say">Figures for the 2,100-acre Kharagpur campus, kept by the sections
-          that do the work and published here as they are recorded.</p>
+        <div class="hero">
+          <div>
+            <h1>What the campus uses, and what it throws away</h1>
+            <p class="say">Figures for the 2,100-acre Kharagpur campus, kept by the sections
+              that do the work and published here as they are recorded.</p>
+          </div>
+          <div class="hero-art">${(window.SDSI_ILL && window.SDSI_ILL.for('solid-waste')) || ''}</div>
+        </div>
+        ${d.demo ? `<p class="flag">These are demonstration figures, for showing how the
+          system works. They are not the institute's recorded data.</p>` : ''}
         <nav class="index">${topics.map(t => {
           const [v, l] = headline(t, d);
           return `<a href="#${esc(t.slug)}">
