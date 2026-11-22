@@ -1,6 +1,6 @@
-/* The public page. It draws whatever /api/public returns and nothing else: it has no
-   session, and the server sends only finished totals, so there is nothing here that
-   could show a daily figure, a hall or an account even by accident. */
+/* The public page. It draws whatever /api/public returns and nothing else: no session,
+   and the server sends only finished totals, so nothing here could show a daily figure,
+   a hall or an account even by accident. */
 (function () {
   'use strict';
 
@@ -16,9 +16,8 @@
     { key: 'Wet', css: 'var(--c3)' },
   ];
 
-  // Tonnes once there are tonnes to show, kilograms before that. A year that has only
-  // just started can hold a few kilos, and rounding five kilograms to "0 tons" reads as
-  // "nothing has been recorded" when something has. Returns the number and its unit.
+  // Tonnes once there are tonnes; kilograms before that, so a year that has only just
+  // begun does not report its first few kilos as zero.
   function mass(tons) {
     const t = n(tons);
     if (!isFinite(t) || t === 0) return ['—', 'tons'];
@@ -41,22 +40,26 @@
     `<div class="band">${items.map(([v, l]) =>
       `<div><div class="v">${esc(v)}</div><div class="l">${esc(l)}</div></div>`).join('')}</div>`;
 
-  // A stacked bar per financial year. The label above each bar is that bar's own height,
-  // so no bar is ever labelled with a number smaller than itself.
+  const photos = t => !(t.photos || []).length ? '' :
+    `<div class="shots">${t.photos.map(s => `<figure>
+      <img src="${esc(s.src)}" alt="${esc(s.caption || t.title)}" loading="lazy" decoding="async">
+      ${s.caption ? `<figcaption>${esc(s.caption)}</figcaption>` : ''}</figure>`).join('')}</div>`;
+
+  // Stacked bars by financial year. Each bar is labelled with its own height.
   function chart(c) {
     if (!c || !c.labels.length) return '';
-    const W = 720, H = 290, padL = 52, padR = 12, padT = 24, padB = 38;
+    const W = 720, H = 280, padL = 52, padR = 12, padT = 22, padB = 36;
     const plotW = W - padL - padR, plotH = H - padT - padB;
     const max = Math.max(...c.totals, 1);
     const step = Math.pow(10, Math.floor(Math.log10(max))) / 2;
     const top = Math.ceil(max / step) * step || 1;
     const y = v => padT + plotH - (v / top) * plotH;
     const slot = plotW / c.labels.length;
-    const bw = Math.min(68, slot * 0.5);
+    const bw = Math.min(64, slot * 0.46);
 
     const rules = [0, 0.25, 0.5, 0.75, 1].map(f => {
       const v = top * f;
-      return `<line x1="${padL}" x2="${W - padR}" y1="${y(v)}" y2="${y(v)}" stroke="var(--rule)" stroke-width="1"/>
+      return `<line x1="${padL}" x2="${W - padR}" y1="${y(v)}" y2="${y(v)}" stroke="var(--rule)"/>
         <text x="${padL - 9}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="var(--quiet)">${inr(v, 0)}</text>`;
     }).join('');
 
@@ -75,129 +78,97 @@
       return `${segs}
         <text x="${cx}" y="${y(acc) - 7}" text-anchor="middle" font-size="12" font-weight="600"
           fill="var(--ink)">${inr(acc, 0)}</text>
-        <text x="${cx}" y="${H - 13}" text-anchor="middle" font-size="12" fill="var(--quiet)">${esc(label)}</text>`;
+        <text x="${cx}" y="${H - 12}" text-anchor="middle" font-size="12" fill="var(--quiet)">${esc(label)}</text>`;
     }).join('');
 
-    return `<figure>
+    return `<figure class="chart">
       <p class="legend">${SERIES.map(s =>
         `<span><i class="key" style="background:${s.css}"></i>${esc(s.key)}</span>`).join('')}</p>
       <svg viewBox="0 0 ${W} ${H}" width="100%" role="img"
         aria-label="Solid waste by financial year, split into horticulture, dry and wet waste, in tons.">
-        ${rules}
-        <text x="${padL - 9}" y="${padT - 9}" text-anchor="end" font-size="11" fill="var(--quiet)">Tons</text>
-        ${bars}
+        ${rules}<text x="${padL - 9}" y="${padT - 8}" text-anchor="end" font-size="11" fill="var(--quiet)">Tons</text>${bars}
       </svg>
-      <figcaption>All three types added together. The institute's published
-        <em>Total Solid Waste</em> counts dry and wet only.</figcaption>
     </figure>`;
   }
 
-  // The figure shown beside a topic in the index.
-  function headline(t, d) {
-    if (t.data === 'waste' && d.latestYear) {
-      const [v, unit] = mass(d.latestYear.total);
-      return [v, `${unit} · ${d.latestYear.fy}`];
-    }
-    if (t.data === 'sewage') return [inr(d.plants.capacity, 3), 'MLD treated'];
-    if (t.stat) return [t.stat.value, t.stat.label];
-    return ['', ''];
+  let DATA = null;
+
+  function overview(d) {
+    const y = d.latestYear;
+    const [tot, unit] = y ? mass(y.total) : ['—', 'tons'];
+    return `<h1>Environmental sustainability</h1>
+      <p class="lead">Figures for the 2,100-acre Kharagpur campus.</p>
+      ${d.demo ? '<p class="flag">Demonstration figures, not the institute’s recorded data.</p>' : ''}
+      ${band([
+        [tot, `Solid waste, ${unit} · ${y ? y.fy : ''}`],
+        [inr(d.plants.capacity, 3), 'MLD treated daily'],
+        ['5,558', 'kWp solar installed'],
+        ['2,375', 'tCO₂ a year, Scope 1'],
+      ])}
+      ${chart(d.chart)}
+      ${grid(d.waste, 'Waste generated by financial year')}
+      ${d.waste.note ? `<p class="foot-note">${esc(d.waste.note)}</p>` : ''}`;
   }
 
-  function section(t, d) {
-    let figures = '';
+  function topicView(t, d) {
+    let rest = '';
     if (t.data === 'waste') {
       const y = d.latestYear;
       const rec = y ? n(y.recycled) + n(y.processed) : null;
-      figures = band([
-        ...(() => { const [v, unit] = y ? mass(y.total) : ['—', 'tons'];
-          return [[v, `Total solid waste, ${unit} · ${y ? y.fy : ''}`]]; })(),
+      const [tot, unit] = y ? mass(y.total) : ['—', 'tons'];
+      rest = band([
+        [tot, `Total solid waste, ${unit} · ${y ? y.fy : ''}`],
         [y && n(y.total) ? inr((rec / n(y.total)) * 100, 0) + '%' : '—', 'Recycled or processed'],
         [y ? inr(n(y.ewaste), 0) : '—', 'Electronic waste, kg'],
-      ]) + chart(d.chart) + grid(d.waste, 'Tons, except electronic waste in kilograms')
-        + (d.waste.note ? `<p class="note">${esc(d.waste.note)}</p>` : '')
-        + (d.perType ? grid(d.perType, d.perType.caption) : '');
+      ]) + chart(d.chart)
+        + grid(d.waste, 'Waste generated by financial year, tons')
+        + (d.waste.note ? `<p class="foot-note">${esc(d.waste.note)}</p>` : '')
+        + (d.perType ? grid(d.perType, 'Estimated amount and type of waste generated') : '');
     } else if (t.data === 'sewage') {
-      figures = band([
+      rest = band([
         [inr(d.plants.capacity, 3), 'MLD treatment capacity'],
         [String(d.plants.rows.length), 'plants'],
         ['40%', 'of treated water reused'],
-      ]) + grid(d.plants, 'Plants in service')
-        + (d.lab.rows.length ? grid(d.lab, d.lab.published
-          ? `Treated water quality at ${d.lab.plant}, as published by the institute`
-          : `Treated water quality at ${d.lab.plant}, sampled ${d.lab.sampled}`) : '');
+      ]) + grid(d.plants, 'Sewage and effluent treatment plants')
+        + (d.lab.rows.length ? grid(d.lab, `Treated water from ${d.lab.plant}`) : '');
     } else if (t.table) {
-      figures = grid(t.table, t.table.caption);
+      rest = grid(t.table, t.table.caption);
     }
-    // A photograph beats a drawing; the drawing is what stands in until there is one.
-    const shots = t.photos || [];
-    const art = shots.length ? '' : ((window.SDSI_ILL && window.SDSI_ILL.for(t.slug)) || '');
-    return `<section class="topic" id="${esc(t.slug)}">
-      <div class="head">
-        <div><h2>${esc(t.heading)}</h2>${paras(t.body)}</div>
-        ${art ? `<div class="art">${art}</div>` : ''}
-      </div>
-      ${shots.length ? `<div class="shots shots-${Math.min(shots.length, 3)}">${shots.map(s => `
-        <figure>
-          <img src="${esc(s.src)}" alt="${esc(s.caption || t.title)}" loading="lazy" decoding="async">
-          ${s.caption ? `<figcaption>${esc(s.caption)}</figcaption>` : ''}
-        </figure>`).join('')}</div>` : ''}
-      ${figures}
-    </section>`;
+    const art = (t.photos || []).length ? ''
+      : `<div class="art">${(window.SDSI_ILL && window.SDSI_ILL.for(t.slug)) || ''}</div>`;
+    return `<h1>${esc(t.heading)}</h1>
+      ${d.demo && t.data ? '<p class="flag">Demonstration figures, not the institute’s recorded data.</p>' : ''}
+      ${photos(t)}${art}${paras(t.body)}${rest}`;
   }
 
-  function render(d) {
-    const topics = d.topics || [];
-    document.getElementById('main').innerHTML = `
-      <div class="open"><div class="shell">
-        <div class="hero">
-          <div>
-            <h1>What the campus uses, and what it throws away</h1>
-            <p class="say">Figures for the 2,100-acre Kharagpur campus, kept by the sections
-              that do the work and published here as they are recorded.</p>
-          </div>
-          <div class="hero-art">${(window.SDSI_ILL && window.SDSI_ILL.for('solid-waste')) || ''}</div>
-        </div>
-        ${d.demo ? `<p class="flag">These are demonstration figures, for showing how the
-          system works. They are not the institute's recorded data.</p>` : ''}
-        <nav class="index">${topics.map(t => {
-          const [v, l] = headline(t, d);
-          return `<a href="#${esc(t.slug)}">
-            <span class="name">${esc(t.title)}</span>
-            <span class="fig">${esc(v)}</span>
-            <span class="cap">${esc(l)}</span></a>`;
-        }).join('')}</nav>
-      </div></div>
-
-      <div class="shell"><div class="body">
-        <nav class="rail" aria-label="Topics"><ol>${topics.map(t =>
-          `<li><a href="#${esc(t.slug)}">${esc(t.short)}</a></li>`).join('')}</ol></nav>
-        <div>${topics.map(t => section(t, d)).join('')}</div>
-      </div></div>
-
-      <div class="shell"><p class="foot">
-        ${d.updated ? `Waste and sewage figures up to ${esc(d.updated)}, entered by the hall
-        messes and the sanitation, horticulture, biogas and sewage treatment sections.
-        ` : ''}Other figures are as published by the institute.
-        <a href="/login.html">Sign in</a> to enter data.
-      </p></div>`;
-
-    // Mark the topic the reader is in.
-    const links = [...document.querySelectorAll('.rail a')];
-    const seen = new Map();
-    const io = new IntersectionObserver(es => {
-      es.forEach(e => seen.set(e.target.id, e.intersectionRatio));
-      let best = null, top = 0;
-      seen.forEach((r, id) => { if (r > top) { top = r; best = id; } });
-      links.forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + best));
-    }, { threshold: [0, 0.1, 0.5, 1], rootMargin: '-10% 0px -60% 0px' });
-    document.querySelectorAll('section.topic').forEach(s => io.observe(s));
+  function route() {
+    if (!DATA) return;
+    const slug = location.hash.replace(/^#\/?/, '');
+    const t = DATA.topics.find(x => x.slug === slug);
+    document.getElementById('view').innerHTML =
+      (t ? topicView(t, DATA) : overview(DATA))
+      + `<p class="ends">${DATA.updated ? `Waste and sewage figures up to ${esc(DATA.updated)}. ` : ''}
+         Other figures as published by the institute.</p>`;
+    document.querySelectorAll('.side a').forEach(a => {
+      const on = a.getAttribute('href') === (t ? '#/' + t.slug : '#/');
+      if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+    });
+    document.title = `${t ? t.title : 'Environmental sustainability'} · IIT Kharagpur`;
+    if (t) window.scrollTo({ top: 0, behavior: 'instant' });
   }
 
   fetch('/api/public', { headers: { accept: 'application/json' } })
     .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-    .then(render)
+    .then(d => {
+      DATA = d;
+      document.getElementById('nav').innerHTML =
+        `<li><a href="#/">Overview</a></li>`
+        + d.topics.map(t => `<li><a href="#/${esc(t.slug)}">${esc(t.title)}</a></li>`).join('');
+      window.addEventListener('hashchange', route);
+      route();
+    })
     .catch(() => {
-      document.getElementById('main').innerHTML =
-        '<div class="shell"><p class="state">The figures could not be loaded. Try again shortly.</p></div>';
+      document.getElementById('view').innerHTML =
+        '<p class="state">The figures could not be loaded. Try again shortly.</p>';
     });
 })();
