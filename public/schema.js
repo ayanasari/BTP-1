@@ -586,20 +586,17 @@
     const waste = ['mess_waste', 'dry_waste', 'horticulture_waste', 'waste_processed',
       'recyclables_sold', 'ewaste_disposal'];
     const rowsOf = id => ctx.rows[id] || [];
-    // Use one institute-published reporting year across the public headline, chart and table.
-    const byYear = [...PUBLISHED_WASTE].sort((a, b) => b.fy.localeCompare(a.fy)).slice(0, 1);
+    // Use institute-published reporting years across the public headline, chart and table.
+    const byYear = [...PUBLISHED_WASTE].sort((a, b) => b.fy.localeCompare(a.fy));
     // Column order follows the institute's own published table.
     const wasteTable = {
       // Short headings so all eight columns fit a laptop without sideways scrolling;
       // the units are stated once, above the table.
       head: ['Year', 'Total Solid Waste', 'Horticulture', 'Dry', 'Wet',
         'Dry Recycled', 'Bio/Food Processed', 'E-waste, kg'],
-      rows: byYear.map(y => [y.published ? `${y.fy} *` : y.fy,
+      rows: byYear.map(y => [y.fy,
         fmt(y.total, 2), fmt(y.horticulture, 2), fmt(y.dry, 2),
         fmt(y.wet, 2), fmt(y.recycled, 2), fmt(y.processed, 2), fmt(y.ewaste, 0)]),
-      note: byYear.some(y => y.published)
-        ? '* Published by the institute for years before this portal began recording.'
-        : null,
     };
 
     const head = byYear.find(y => num(y.total) > 0) || byYear[0];
