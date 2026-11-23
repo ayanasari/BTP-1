@@ -325,16 +325,11 @@ async function handleApi(req, res, url, user, token) {
     const marks = known.map(() => '?').join(',');
     const rows = {};
     known.forEach(id => { rows[id] = []; });
-    for (const r of db.prepare(`SELECT table_id, period, data FROM entries WHERE table_id IN (${marks})`).all(...known)) {
+    for (const r of db.prepare(`SELECT table_id, period, data FROM entries WHERE table_id IN (${marks}) AND COALESCE(created_by, '') != 'demo'`).all(...known)) {
       rows[r.table_id].push({ period: r.period, data: JSON.parse(r.data) });
     }
     const view = SDSI.publicView({ rows, today: localToday() });
 
-    // demo-data.js marks everything it writes as entered by "demo". While any of it is
-    // present the public page says so, because this page is reachable by anyone and
-    // invented tonnages that look official are the kind of thing that gets quoted.
-    // `node demo-data.js --clear` removes the rows and the notice goes with them.
-    view.demo = !!db.prepare("SELECT 1 FROM entries WHERE created_by = 'demo' LIMIT 1").get();
 
 
     // The eight topics, with any wording the administrator has edited taking the place of
@@ -608,7 +603,7 @@ function publicUser(user) {
 }
 
 // ---------- static files ----------
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.ico': 'image/x-icon' };
 
 function serveStatic(res, pathname) {
   let file;
@@ -673,7 +668,8 @@ function sniffImage(b) {
 }
 
 const OPEN_PAGES = new Set(['/login.html', '/styles.css', '/favicon.ico',
-  '/public.html', '/public.js', '/public.css', '/illustrations.js']);
+  '/public.html', '/public.js', '/public.css', '/campus/campus.jpg', '/campus/waste.png',
+  '/campus/water.png', '/campus/energy.jpg']);
 
 const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',

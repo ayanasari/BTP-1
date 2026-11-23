@@ -586,36 +586,8 @@
     const waste = ['mess_waste', 'dry_waste', 'horticulture_waste', 'waste_processed',
       'recyclables_sold', 'ewaste_disposal'];
     const rowsOf = id => ctx.rows[id] || [];
-    const fyOfRow = r => fyOfMonth(monthOf(r));
-    const inFy = (id, fy) => rowsOf(id).filter(r => r.period && fyOfRow(r) === fy);
-
-    const years = new Set();
-    waste.forEach(id => rowsOf(id).forEach(r => { if (r.period) years.add(fyOfRow(r)); }));
-    const list = [...years].sort().reverse();
-
-    const entered = list.map(fy => {
-      const food = sumOf(inFy('mess_waste', fy), 'food_kg');
-      const wet = food;   // see the monthly rollup: campus bin collection is added here later
-      const dry = sumOf(inFy('dry_waste', fy), 'dry_kg');
-      const hort = add(...inFy('horticulture_waste', fy).map(r => tables.horticulture_waste.calc(r).total_kg));
-      return {
-        fy,
-        // The institute's definition: dry plus wet, with horticulture reported alongside
-        // rather than inside it. See the note on PUBLISHED_WASTE.
-        total: tons(add(dry, wet)),
-        horticulture: tons(hort), dry: tons(dry), wet: tons(wet),
-        recycled: tons(sumOf(inFy('recyclables_sold', fy), 'qty_kg')),
-        processed: tons(sumOf(inFy('waste_processed', fy), 'input_kg')),
-        ewaste: sumOf(inFy('ewaste_disposal', fy), 'qty_kg'),
-      };
-    });
-
-    // The portal's own figures win for a year it covers; published history fills the rest.
-    const covered = new Set(entered.map(r => r.fy));
-    const byYear = entered
-      .concat(PUBLISHED_WASTE.filter(p => !covered.has(p.fy)))
-      .sort((a, b) => b.fy.localeCompare(a.fy));
-
+    // Use one institute-published reporting year across the public headline, chart and table.
+    const byYear = [...PUBLISHED_WASTE].sort((a, b) => b.fy.localeCompare(a.fy)).slice(0, 1);
     // Column order follows the institute's own published table.
     const wasteTable = {
       // Short headings so all eight columns fit a laptop without sideways scrolling;

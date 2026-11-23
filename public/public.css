@@ -87,7 +87,12 @@ main p { max-width: 70ch; margin: 0 0 14px; }
 .shots img { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block;
   border-radius: 6px; background: var(--shade); }
 .shots figcaption { font-size: 12.5px; color: var(--quiet); margin-top: 7px; }
-.art { max-width: 300px; margin: 0 0 30px; }
+.campus-intro { margin-bottom: 2rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--rule); }
+.campus-intro img { width: 100%; height: clamp(105px, 14vw, 205px); object-fit: cover; display: block; margin-bottom: 1.6rem; }
+.campus-intro .lead { margin-bottom: .6rem; }
+.campus-intro a, .campus-photo figcaption { color: var(--quiet); font-size: .83rem; }
+.campus-photo { margin: 0 0 1.6rem; }
+.campus-photo img { display: block; max-width: 100%; height: auto; margin-bottom: .45rem; }
 .ill { width: 100%; height: auto; display: block; }
 
 figure.chart { margin: 0 0 30px; }

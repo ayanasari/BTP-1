@@ -68,6 +68,20 @@ const HALLS = [
   ['PDF Block', null],
 ];
 
+// node demo-data.js 14 --six-messes generates just the mess pilot.
+if (process.argv.includes('--six-messes')) {
+  db.exec('BEGIN IMMEDIATE');
+  for (let d = DAYS; d >= 1; d--) {
+    for (const [hall, base] of HALLS.slice(0, 6)) {
+      add('mess_waste', dayBack(d), { hall, food_kg: near(base, base * 0.3) });
+    }
+  }
+  db.exec('COMMIT');
+  console.log(`Added ${added} demonstration mess records. Skipped ${skipped} existing records.`);
+  db.close();
+  process.exit(0);
+}
+
 // Stops at yesterday: today is left empty so there is something to enter live.
 for (let d = DAYS; d >= 1; d--) {
   const day = dayBack(d);
