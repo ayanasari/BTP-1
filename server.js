@@ -167,6 +167,23 @@ for (const d of users.DIVISIONS) {
 
 users.ensureDivisions(db, DATA_DIR);
 
+// The most one entry may carry, for fields the administrator controls (adminMax in
+// schema.js). Kept in meta as JSON keyed 'table.field'; a field without a saved value
+// uses the max written in schema.js.
+const LIMITS_KEY = 'entry_limits';
+const savedLimits = () => { try { return JSON.parse(metaGet(LIMITS_KEY) || '{}'); } catch { return {}; } };
+const maxOf = (tableId, f, saved = savedLimits()) =>
+  (f.adminMax && saved[`${tableId}.${f.key}`] != null) ? saved[`${tableId}.${f.key}`] : f.max;
+// Every administrator-controlled limit as it stands, for the form and the settings.
+function currentLimits() {
+  const saved = savedLimits();
+  const out = {};
+  for (const [id, t] of Object.entries(SDSI.tables)) {
+    for (const f of t.fields) if (f.adminMax) out[`${id}.${f.key}`] = maxOf(id, f, saved);
+  }
+  return out;
+}
+
 const PERIOD_PATTERNS = {
   month: [/^\d{4}-(0[1-9]|1[0-2])$/, 'a month'],
   fy: [/^\d{4}-\d{2}$/, 'a financial year like 2024-25'],
@@ -251,6 +268,15 @@ function clean(user, tableId, period, data, selfId) {
       const n = Number(v);
       if (!Number.isFinite(n)) throw new HttpError(400, `"${f.label}" must be a number`);
       if (n < 0) throw new HttpError(400, `"${f.label}" cannot be negative`);
+      // The limits in schema.js are far beyond anything real, so a figure past one is a
+      // typing mistake, not an unusual day. Unusual days are only warned about, in the form.
+      const unit = f.unit ? ` ${f.unit}` : '';
+      if (f.min != null && n < f.min) throw new HttpError(400, `"${f.label}" cannot be less than ${f.min}${unit}.`);
+      const max = maxOf(tableId, f);
+      if (max != null && n > max) {
+        throw new HttpError(400, `"${f.label}" of ${n}${unit} is more than the most allowed per entry (${max}${unit}). ` +
+          'Check the figure. If it really is that much, ask the administrator to raise the limit.');
+      }
       v = n;
     } else if (f.type === 'select') {
       if (!f.options.includes(v)) throw new HttpError(400, `"${f.label}" must be one of: ${f.options.join(', ')}`);
@@ -261,6 +287,10 @@ function clean(user, tableId, period, data, selfId) {
     }
     out[f.key] = v;
   }
+
+  // Rules across fields, such as "composted cannot exceed what was collected".
+  const broken = table.validate ? table.validate(out) : null;
+  if (broken) throw new HttpError(400, broken);
 
   // Prevent two entries for the same day and hall, the same day and plant, and so on.
   if (table.unique) {
@@ -536,6 +566,27 @@ async function handleApi(req, res, url, user, token) {
     return sendJson(res, 200, { ok: true });
   }
 
+  // The administrator sets the most one entry may carry, for the fields that allow it.
+  if (p === '/api/limits' && req.method === 'POST') {
+    if (!users.isAdmin(user)) throw new HttpError(403, 'Administrators only.');
+    const body = await readBody(req);
+    const t = SDSI.tables[body.table];
+    const f = t && t.fields.find(x => x.key === body.field);
+    if (!f || !f.adminMax) throw new HttpError(400, 'That figure has no adjustable limit.');
+    const saved = savedLimits();
+    const key = `${body.table}.${f.key}`;
+    if (body.max === null || body.max === '') {
+      delete saved[key];                       // back to the starting limit
+    } else {
+      const n = Number(body.max);
+      if (!Number.isFinite(n) || n <= 0) throw new HttpError(400, 'The limit must be a number above zero.');
+      saved[key] = n;
+    }
+    metaSet(LIMITS_KEY, JSON.stringify(saved));
+    console.log(`  ${user.username} set the limit for ${key} to ${saved[key] ?? `the default (${f.max})`}.`);
+    return sendJson(res, 200, { ok: true, limits: currentLimits() });
+  }
+
   if (p === '/api/users') {
     if (!users.isAdmin(user)) throw new HttpError(403, 'Administrators only.');
     if (req.method === 'GET') return sendJson(res, 200, { users: users.list(db) });
@@ -566,8 +617,43 @@ async function handleApi(req, res, url, user, token) {
     // so they stay out of a list that answers "who has been entering what".
     const rows = db.prepare(`SELECT * FROM entries WHERE table_id IN (${marks})
       AND IFNULL(created_by, '') != 'published'
-      ORDER BY datetime(created_at) DESC, id DESC LIMIT ?`).all(...known, limit);
-    return sendJson(res, 200, { entries: rows.map(rowOut) });
+      ORDER BY datetime(created_at) DESC, id DESC LIMIT ?`).all(...known, limit).map(rowOut);
+    // Each entry is checked against the same hall's (or plant's) other entries, the same
+    // check the form makes, so a figure someone saved past the warning still stands out.
+    const history = {};
+    const historyOf = id => history[id] || (history[id] = db.prepare(
+      'SELECT id, period, data FROM entries WHERE table_id = ?').all(id)
+      .map(r => ({ id: r.id, period: r.period, data: JSON.parse(r.data) })));
+    for (const r of rows) {
+      const t = SDSI.tables[r.table];
+      r.warnings = t.fields.some(f => f.check) || t.warn
+        ? SDSI.checkEntry(t, r, historyOf(r.table)).map(w => w.message) : [];
+    }
+    return sendJson(res, 200, { entries: rows });
+  }
+
+  // Who has and hasn't entered, day by day, for the tables that expect a regular figure.
+  if (p === '/api/coverage' && req.method === 'GET') {
+    if (!users.isAdmin(user)) throw new HttpError(403, 'Administrators only.');
+    const days = Math.min(Math.max(Number(url.searchParams.get('days')) || 14, 1), 60);
+    const expected = Object.keys(SDSI.tables).filter(id => SDSI.tables[id].expect);
+    const rows = {};
+    for (const id of expected) {
+      rows[id] = db.prepare('SELECT period, data FROM entries WHERE table_id = ?').all(id)
+        .map(r => ({ period: r.period, data: JSON.parse(r.data) }));
+    }
+    const groups = SDSI.coverage({ rows, today: localToday(), days });
+    // Who to chase for each line: the account that enters that table, for that hall if
+    // the account is scoped to one.
+    const accounts = users.list(db).filter(a => a.role !== 'admin');
+    for (const g of groups) {
+      for (const line of g.lines) {
+        const a = accounts.find(x => (x.tables === '*' || x.tables.includes(g.table))
+          && (!x.scope || x.scope === line.name));
+        line.account = a ? { username: a.username, email: a.email, active: a.active } : null;
+      }
+    }
+    return sendJson(res, 200, { today: localToday(), days, groups });
   }
 
   const idMatch = p.match(/^\/api\/entries\/(\d+)$/);
@@ -620,6 +706,7 @@ function publicUser(user) {
     scope: user.scope, tables: user.mustChange ? [] : allowed,
     isAdmin: user.role === 'admin', mustChange: !!user.mustChange,
     minPassword: users.MIN_PASSWORD,
+    limits: currentLimits(),
   };
 }
 

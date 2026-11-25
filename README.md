@@ -265,6 +265,27 @@ entries and years already available in the Institute's historical series.
   (energy, emissions, education, equality and so on) are moved into an `archived_entries` table
   rather than deleted.
 
+## Catching gaps and typos (mess food waste only, for now)
+
+**Administration → Missing entries** shows, for the last 7, 14 or 30 days, which halls
+have entered their food waste and which haven't: one line per hall, one cell per day, the
+worst first, with a button to copy the addresses of every mess not yet in today. Today is
+still open, so it is never counted as missed. A table is tracked when it has an `expect`
+setting in `public/schema.js`; only `mess_waste` has one.
+
+**The most one mess may enter in a day is set by the administrator**, on the Mess food
+waste page (it starts at 3,000 kg). The server refuses anything above it and tells the
+person to check the figure. It applies to every hall. Any field marked `adminMax` in
+`public/schema.js` gets the same control; the value is kept in the database, not the code.
+
+**A figure far from that hall's usual one is questioned before it is saved.** It is
+compared with the hall's last 30 entries; at four times the usual or a quarter of it, the
+form asks the person to look again, suggests the figure with the decimal point moved when
+that lands near the usual one ("Did you mean 150 kg?"), and saves on a second press.
+Nothing is said until a hall has five entries. Anything saved past the warning is marked
+in **Recent entries**. Fields marked `check: true` get this; the thresholds are `CHECK_*`
+in `public/schema.js`.
+
 ## Files
 
 - `public/schema.js`: every category, section, table, column, calculation and monthly rollup. Add or change sections here.

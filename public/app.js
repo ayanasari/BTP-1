@@ -39,6 +39,8 @@
 
   // The scope field (hall, plant, facility) is fixed by the account, so it is shown but never asked.
   const lockedField = t => (me && me.scope && t.scopeField) ? t.scopeField : null;
+  // The most one entry may carry: the administrator's setting where there is one.
+  const maxFor = (tableId, f) => me?.limits?.[`${tableId}.${f.key}`] ?? f.max;
   function loadOpenCats() {
     try { return JSON.parse(localStorage.getItem('sdsi.openCats')) || []; } catch { return []; }
   }
@@ -127,7 +129,7 @@
           <section class="cat-card">
             <h2>${esc(cat.title)}</h2>
             <ul>${cat.sections.map(s => {
-              const note = s.recent ? 'everyone' : s.overview ? 'summary'
+              const note = s.recent ? 'everyone' : s.coverage ? 'who is behind' : s.overview ? 'summary'
                 : `${s.tables.length} table${s.tables.length > 1 ? 's' : ''}`;
               return `<li><a href="#/s/${s.id}">${esc(s.title)} <span>${note} ›</span></a></li>`;
             }).join('')}</ul>
@@ -148,6 +150,7 @@
     document.title = `${section.title} · SDSI Data Entry`;
     $main.innerHTML = `<div class="crumbs"><a href="#/">Home</a> › ${esc(cat.title)}</div><h1>${esc(section.title)}</h1><p class="empty">Loading…</p>`;
     if (section.recent) return drawRecent();
+    if (section.coverage) return drawCoverage();
     if (section.pages) return drawPages();
     try {
       current.rows = await api('GET', `/api/entries?tables=${section.tables.join(',')}`);
@@ -427,10 +430,31 @@
         </div>
         ${reporting ? reportPanelHtml() : ''}
         ${t.note ? `<p class="card-note">${esc(t.note)}</p>` : ''}
+        ${limitBoxHtml(tableId)}
         ${editing ? formHtml(tableId, editing.id ? rows.find(r => r.id === editing.id) : null) : ''}
         ${rows.length ? rowsTable(tableId, rows, ctx) : `<p class="empty">No entries yet. Use “+ Add entry” to add the first one.</p>`}
         ${reportHtml(tableId, rows, ctx)}
       </section>`;
+  }
+
+  // For the administrator: the most one entry may carry, for fields that allow setting it.
+  // The server enforces it; anything above is refused with a message to check the figure.
+  function limitBoxHtml(tableId) {
+    const t = tables[tableId];
+    const fields = t.fields.filter(f => f.adminMax);
+    if (!me?.isAdmin || !fields.length) return '';
+    const who = t.scopeField ? `one ${t.fields.find(f => f.key === t.scopeField).label.toLowerCase()}` : 'one entry';
+    return fields.map(f => {
+      const cur = maxFor(tableId, f);
+      const unit = f.unit ? ` ${esc(f.unit)}` : '';
+      return `<div class="limit-box">
+        <label for="lim_${esc(f.key)}"><b>Most per entry</b> — ${esc(f.label.toLowerCase())}, for any ${esc(who)}${t.period === 'date' ? ' in a day' : ''}</label>
+        <input type="number" min="1" step="any" id="lim_${esc(f.key)}" value="${esc(cur)}">${unit}
+        <button class="btn" data-act="save-limit" data-field="${esc(f.key)}">Save limit</button>
+        ${cur !== f.max ? `<button class="btn-link" data-act="reset-limit" data-field="${esc(f.key)}">Back to ${esc(fmt(f.max, 3))}${unit}</button>` : ''}
+        <span class="unit">Anything above this is refused.</span>
+      </div>`;
+    }).join('');
   }
 
   function periodLabel(t) { return t.periodLabel || PERIOD_LABEL[t.period]; }
@@ -517,7 +541,7 @@
   }
 
   // ---------- form ----------
-  function inputHtml(f, value) {
+  function inputHtml(f, value, max = f.max) {
     const v = value ?? '';
     const name = `name="${f.key}" id="f_${f.key}"`;
     const req = f.required ? 'required' : '';
@@ -525,7 +549,9 @@
       return `<select ${name} ${req}><option value="">Select…</option>${f.options.map(o => `<option ${o === v ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
     }
     if (f.type === 'textarea') return `<textarea ${name} ${req}>${esc(v)}</textarea>`;
-    if (f.type === 'number') return `<input type="number" step="any" min="0" ${name} value="${esc(v)}" ${req}>`;
+    if (f.type === 'number') {
+      return `<input type="number" step="any" min="${f.min ?? 0}" ${max != null ? `max="${max}"` : ''} ${name} value="${esc(v)}" ${req}>`;
+    }
     if (f.type === 'date') return `<input type="date" ${name} value="${esc(v)}" ${req}>`;
     if (f.type === 'url') return `<input type="url" ${name} value="${esc(v)}" placeholder="https://" ${req}>`;
     return `<input type="text" ${name} value="${esc(v)}" ${req}>`;
@@ -558,7 +584,7 @@
           ${t.fields.filter(f => f.key !== locked).map(f => `
             <div class="field ${f.type === 'textarea' ? 'wide' : ''}">
               <label for="f_${f.key}">${esc(f.label)}${f.unit ? ` <span class="unit">(${esc(f.unit)})</span>` : ''}${f.required ? ' <span class="req">*</span>' : ''}</label>
-              ${inputHtml(f, row ? row.data[f.key] : null)}
+              ${inputHtml(f, row ? row.data[f.key] : null, maxFor(tableId, f))}
             </div>`).join('')}
         </div>
         <div class="form-actions">
@@ -566,6 +592,7 @@
           <button type="button" class="btn" data-act="cancel">Cancel</button>
           <span class="form-error" hidden></span>
         </div>
+        <div class="form-warn" hidden role="alert"></div>
       </form>`;
   }
 
@@ -594,6 +621,12 @@
         applyAutofill(form, t);
         form.addEventListener('input', e => {
           if (e.target.dataset.auto) { delete e.target.dataset.auto; e.target.classList.remove('auto'); }
+          // A changed figure is checked afresh, so the earlier warning no longer applies.
+          if (form.dataset.confirmed) {
+            delete form.dataset.confirmed;
+            form.querySelector('.form-warn').hidden = true;
+            form.querySelector('button[type="submit"]').textContent = current.editing?.id ? 'Save changes' : 'Save entry';
+          }
         });
         form.addEventListener('change', () => applyAutofill(form, t));
         form.addEventListener('submit', e => { e.preventDefault(); submitForm(form, tableId); });
@@ -615,6 +648,16 @@
     if (act === 'add') { current.editing = { tableId, id: null }; redraw(tableId); }
     if (act === 'edit') { current.editing = { tableId, id: Number(btn.dataset.id) }; redraw(tableId); }
     if (act === 'cancel') { current.editing = null; redraw(tableId); }
+    if (act === 'save-limit' || act === 'reset-limit') {
+      const field = btn.dataset.field;
+      const max = act === 'reset-limit' ? null : btn.closest('.limit-box').querySelector('input').value;
+      try {
+        const res = await api('POST', '/api/limits', { table: tableId, field, max });
+        me.limits = res.limits;
+        redraw(tableId);
+        toast(act === 'reset-limit' ? 'Limit put back' : 'Limit saved');
+      } catch (err) { toast(err.message); }
+    }
     if (act === 'delete') {
       if (!window.confirm('Delete this entry? This cannot be undone.')) return;
       try {
@@ -651,6 +694,47 @@
     const data = {};
     t.fields.forEach(f => { data[f.key] = fd[f.key] ?? ''; });
     const editingId = current.editing?.id;
+
+    // Past a field's hard limit the server refuses anyway; saying so here is quicker.
+    for (const f of t.fields) {
+      if (f.type !== 'number' || data[f.key] === '') continue;
+      const n = Number(data[f.key]);
+      const max = maxFor(tableId, f);
+      if (max != null && n > max) {
+        $err.textContent = `“${f.label}” cannot be more than ${fmt(max, 3)}${f.unit ? ' ' + f.unit : ''} in one entry. Check the figure.`;
+        $err.hidden = false;
+        form.elements[f.key]?.focus();
+        return;
+      }
+    }
+
+    // A figure far from what this hall usually reports is probably a slipped decimal
+    // point. Ask once; saving the same figures again goes through.
+    const $warn = form.querySelector('.form-warn');
+    const locked = lockedField(t);
+    const asSaved = { ...data, ...(locked ? { [locked]: me.scope } : {}) };
+    const warnings = SDSI.checkEntry(t, { id: editingId, period, data: asSaved }, current.rows[tableId] || []);
+    const signature = JSON.stringify([period, data]);
+    if (warnings.length && form.dataset.confirmed !== signature) {
+      form.dataset.confirmed = signature;
+      $warn.innerHTML = `
+        <p><b>Please check ${warnings.length === 1 ? 'this figure' : 'these figures'} before saving.</b></p>
+        <ul>${warnings.map(w => `<li>${esc(w.message)}${w.suggest != null && w.key
+          ? ` <button type="button" class="btn-link" data-fix="${esc(w.key)}" data-value="${esc(w.suggest)}">Use ${esc(fmt(w.suggest, 3))}</button>`
+          : ''}</li>`).join('')}</ul>
+        <p class="unit">If the figure is right, press Save again.</p>`;
+      $warn.hidden = false;
+      $warn.querySelectorAll('[data-fix]').forEach(b => b.addEventListener('click', () => {
+        const input = form.elements[b.dataset.fix];
+        input.value = b.dataset.value;
+        input.dispatchEvent(new Event('input', { bubbles: true })); // clears the warning
+        input.focus();
+      }));
+      const btn = form.querySelector('button[type="submit"]');
+      btn.textContent = 'Yes, it is right — save';
+      (form.querySelector('[data-fix]') || btn).focus();
+      return;
+    }
     try {
       const saved = editingId
         ? await api('PUT', `/api/entries/${editingId}`, { period, data })
@@ -957,7 +1041,8 @@
               <td class="nowrap"><b>${esc(r.created_by || '—')}</b></td>
               <td class="nowrap">${esc(t.title)}</td>
               <td class="nowrap">${t.period ? esc(formatPeriod(t.period, r.period)) : '—'}</td>
-              <td class="long">${entrySummary(t, r)}</td>
+              <td class="long">${entrySummary(t, r)}${(r.warnings || []).length
+                ? `<div class="unusual" title="${esc(r.warnings.join('\n'))}">${esc(r.warnings[0])}</div>` : ''}</td>
               <td class="actions nowrap">
                 <a class="btn-link" href="#/s/${esc(sectionIdFor(r.table))}">Open section</a>
                 <button class="btn-link danger" data-recent-delete="${r.id}">Delete</button>
@@ -977,6 +1062,88 @@
           drawRecent();
         } catch (err) { toast(err.message); }
       }));
+  }
+
+  // ---------- who hasn't reported ----------
+  // One grid per table that expects a regular figure: a line per hall (or plant), a cell
+  // per day. The worst lines come first, because they are the people to telephone.
+  let coverageDays = 14;
+
+  async function drawCoverage() {
+    const { cat, section } = current;
+    let data;
+    try {
+      data = await api('GET', `/api/coverage?days=${coverageDays}`);
+    } catch (err) {
+      $main.innerHTML = `<h1>${esc(section.title)}</h1><p class="empty">${esc(err.message)}</p>`;
+      return;
+    }
+    if (current?.section !== section) return; // moved on while loading
+    const dayHead = (g, s) => {
+      if (g.period === 'week') {
+        const [a] = SDSI.helpers.periodRange('week', s);
+        return `<th class="cov-day" title="${esc(formatPeriod('week', s))}">${esc(formatDate(a).replace(/ \d{4}$/, ''))}</th>`;
+      }
+      const d = new Date(`${s}T00:00:00Z`);
+      const dow = 'SMTWTFS'[d.getUTCDay()];
+      return `<th class="cov-day" title="${esc(formatDate(s))}">${dow}<br>${d.getUTCDate()}</th>`;
+    };
+    const mark = { ok: '✓', miss: '✗', open: '·' };
+    const what = { ok: 'entered', miss: 'missing', open: 'not yet (still open)' };
+
+    const groupHtml = g => {
+      const lines = [...g.lines].sort((a, b) => b.missed - a.missed || String(a.name).localeCompare(String(b.name)));
+      const unit = g.period === 'week' ? 'week' : 'day';
+      const doneNow = g.lines.filter(l => l.doneNow).length;
+      // One account can enter for several plants, so each address appears once.
+      const behind = [...new Set(g.lines.filter(l => !l.doneNow && l.account?.email).map(l => l.account.email))];
+      const now = g.period === 'week' ? 'this week' : 'today';
+      const totalMissed = g.lines.reduce((s, l) => s + l.missed, 0);
+      return `
+      <section class="card" data-cov="${esc(g.table)}">
+        <div class="card-head">
+          <h2>${esc(g.title)}<span class="count">${g.period === 'week' ? 'weekly' : 'daily'}${g.per ? `, one per ${esc(g.per.toLowerCase())}` : ''}</span></h2>
+          ${behind.length ? `<div class="head-actions"><button class="btn" data-copy="${esc(behind.join(', '))}">Copy ${behind.length === 1 ? 'the email' : `${behind.length} emails`} of those not yet in</button></div>` : ''}
+        </div>
+        <p class="card-note">
+          ${g.lines.length > 1 ? `<b>${doneNow} of ${g.lines.length}</b> have entered ${now}.` : doneNow ? `Entered ${now}.` : `<b>Not yet entered ${now}.</b>`}
+          ${totalMissed ? `${totalMissed} missed ${unit}${totalMissed === 1 ? '' : 's'} in the window.` : `Nothing missed in the window.`}
+          ${g.never.length ? `<br>Never entered at all, so not counted: ${g.never.map(esc).join(', ')}.` : ''}
+        </p>
+        ${g.lines.length ? `<div class="table-wrap"><table class="data cov">
+          <thead><tr>
+            <th>${esc(g.per || 'Entered by')}</th><th class="num">Missed</th><th>Last entry</th>
+            ${g.slots.map(s => dayHead(g, s)).join('')}
+          </tr></thead>
+          <tbody>${lines.map(l => `<tr>
+            <td class="nowrap"><b>${esc(l.name || (l.account ? l.account.username : '—'))}</b>
+              ${l.account ? `<div class="unit">${esc(l.account.email || l.account.username)}${l.account.active ? '' : ' · switched off'}</div>` : '<div class="unit">no account</div>'}</td>
+            <td class="num">${l.missed}</td>
+            <td class="nowrap">${l.last ? esc(formatPeriod(g.period, l.last)) : 'never'}</td>
+            ${l.cells.map((c, i) => `<td class="cov-cell ${c}" title="${esc(formatPeriod(g.period, g.slots[i]))}: ${what[c]}">${mark[c]}</td>`).join('')}
+          </tr>`).join('')}</tbody>
+        </table></div>` : ''}
+      </section>`;
+    };
+
+    $main.innerHTML = `
+      <div class="crumbs"><a href="#/">Home</a> › ${esc(cat.title)}</div>
+      <h1>${esc(section.title)}</h1>
+      <p class="intro">Who has and hasn't entered their figures, up to today (${esc(formatDate(data.today))}).
+        Today is still open, so it is not counted as missed. Only mess food waste is tracked for now.</p>
+      <div class="cov-window">Show the last
+        ${[7, 14, 30].map(n => `<button class="btn ${n === data.days ? 'btn-primary' : ''}" data-days="${n}">${n} days</button>`).join('')}
+      </div>
+      ${data.groups.map(groupHtml).join('')}`;
+
+    $main.querySelectorAll('[data-days]').forEach(b => b.addEventListener('click', () => {
+      coverageDays = Number(b.dataset.days);
+      drawCoverage();
+    }));
+    $main.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(b.dataset.copy); toast('Email addresses copied'); }
+      catch { window.prompt('Copy these addresses:', b.dataset.copy); }
+    }));
   }
 
   // Which section page holds a given table, so the admin can jump there to correct it.

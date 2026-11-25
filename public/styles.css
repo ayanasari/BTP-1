@@ -11,6 +11,8 @@
   --calc-bg: #f2f8f4;
   --danger: #b42318;
   --danger-soft: #fdecea;
+  --warn: #8a5300;
+  --warn-soft: #fff4dd;
   --focus: #2f855a;
   --radius: 10px;
   --shadow: 0 1px 2px rgba(16, 40, 24, .06), 0 2px 8px rgba(16, 40, 24, .05);
@@ -30,6 +32,8 @@
     --calc-bg: #1b2a20;
     --danger: #f2877d;
     --danger-soft: #3a1f1c;
+    --warn: #f0c674;
+    --warn-soft: #382c12;
     --focus: #4fbf83;
     --shadow: none;
     color-scheme: dark;
@@ -298,3 +302,26 @@ table.mini th { color: var(--muted); font-weight: 600; white-space: nowrap; }
   padding: 2px 6px; border-radius: 6px;
   background: var(--brand-soft); color: var(--brand-strong); font-weight: 600;
 }
+
+/* ---------- a figure that looks off ---------- */
+.form-warn { margin-top: 12px; padding: 10px 14px; border-radius: 8px; background: var(--warn-soft);
+  color: var(--text); border-left: 4px solid var(--warn); font-size: 14px; }
+.form-warn p { margin: 4px 0; }
+.form-warn ul { margin: 6px 0; padding-left: 20px; }
+.form-warn li { margin: 4px 0; }
+.unusual { margin-top: 4px; font-size: 12px; color: var(--warn); }
+.unusual::before { content: '⚠ '; }
+
+/* ---------- missing entries ---------- */
+.cov-window { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 0 0 16px; color: var(--muted); }
+table.cov th.cov-day { text-align: center; font-size: 11px; line-height: 1.2; padding: 6px 4px; min-width: 26px; }
+table.cov td.cov-cell { text-align: center; padding: 6px 4px; font-weight: 600; }
+table.cov td.cov-cell.ok { background: var(--brand-soft); color: var(--brand-strong); }
+table.cov td.cov-cell.miss { background: var(--danger-soft); color: var(--danger); }
+table.cov td.cov-cell.open { color: var(--muted); }
+
+/* ---------- the administrator's limit on one entry ---------- */
+.limit-box { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 18px 12px;
+  padding: 10px 14px; border: 1px dashed var(--border); border-radius: 8px; background: var(--surface-2); font-size: 14px; }
+.limit-box label { flex-basis: 100%; }
+.limit-box input { width: 120px; }

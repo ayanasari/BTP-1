@@ -151,8 +151,12 @@
       scopeField: 'hall',          // staff accounts are locked to one hall
       fields: [
         { key: 'hall', label: 'Hall', type: 'select', options: HALLS, required: true },
-        { key: 'food_kg', label: 'Food waste', unit: 'kg', type: 'number', required: true },
+        // `max` is only the starting limit: the administrator sets the real one from the
+        // site (adminMax), and the server enforces whichever is current.
+        { key: 'food_kg', label: 'Food waste', unit: 'kg', type: 'number', required: true,
+          max: 3000, adminMax: true, check: true },
       ],
+      expect: { per: 'hall' },     // every hall, every day
       summary(rows) {
         const byMonth = groupBy(rows.filter(r => r.period), monthOf);
         const months = byKeyDesc(byMonth);
@@ -722,6 +726,110 @@
     };
   }
 
+
+  // ---------- checking a figure before it is saved ----------
+  // Two kinds. A field's min/max and a table's validate() are hard rules, enforced by the
+  // server: no mess wastes 30 tonnes of food in a day. checkEntry() only warns. It compares
+  // a figure with what the same hall (or plant, or facility) usually reports, because the
+  // common mistake is not an impossible number but a plausible-looking one with a slipped
+  // decimal point: 1500 for 150. The person is asked to look again, and may save anyway.
+  const CHECK_HISTORY = 30;   // compare with this many recent entries
+  const CHECK_MIN = 5;        // and say nothing until there are at least this many
+  const CHECK_FACTOR = 4;     // warn at four times the usual, or a quarter of it
+  const median = xs => {
+    const s = [...xs].sort((a, b) => a - b), m = s.length >> 1;
+    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+  };
+
+  // entry: { id?, period, data }. rows: entries already in the same table, any order.
+  // Returns [{ key, label, message, suggest }], empty when nothing looks off.
+  function checkEntry(table, entry, rows) {
+    const out = [];
+    const sf = table.scopeField;
+    const peers = (rows || [])
+      .filter(r => r.id !== entry.id && (!sf || r.data[sf] === entry.data[sf]))
+      .sort((a, b) => String(b.period || '').localeCompare(String(a.period || '')))
+      .slice(0, CHECK_HISTORY);
+    const whose = sf && entry.data[sf] ? ` for ${entry.data[sf]}` : '';
+    for (const f of table.fields) {
+      if (!f.check) continue;
+      const v = num(entry.data[f.key]);
+      if (v == null) continue;
+      const vals = peers.map(r => num(r.data[f.key])).filter(x => x != null);
+      if (vals.length < CHECK_MIN) continue;
+      const usual = median(vals);
+      if (!(usual > 0)) continue;
+      const ratio = v / usual;
+      if (ratio < CHECK_FACTOR && ratio > 1 / CHECK_FACTOR) continue;
+      const unit = f.unit ? ` ${f.unit}` : '';
+      const q = x => fmt(x, Math.abs(x) < 10 ? 2 : 0);
+      // A slipped decimal point: is there a power of ten that lands near the usual figure?
+      let suggest = null;
+      if (v > 0) {
+        for (const p of [10, 100, 1000]) {
+          const c = ratio > 1 ? v / p : v * p;
+          if (c / usual <= 1.6 && c / usual >= 1 / 1.6) { suggest = +c.toPrecision(6); break; }
+        }
+      }
+      const what = `${f.label}: ${q(v)}${unit}`;
+      const usualTxt = `${q(usual)}${unit}`;
+      const head = v === 0 ? `${what}, when it is usually about ${usualTxt}`
+        : ratio > 1 ? `${what} is about ${fmt(ratio, ratio < 10 ? 1 : 0)} times the usual ${usualTxt}`
+        : `${what} is only ${fmt(ratio * 100, ratio < 0.1 ? 1 : 0)}% of the usual ${usualTxt}`;
+      out.push({
+        key: f.key, label: f.label, suggest,
+        message: `${head} (typical of the last ${vals.length} entries${whose}).` +
+          (suggest != null ? ` Did you mean ${q(suggest)}${unit}?` : ''),
+      });
+    }
+    const extra = table.warn ? table.warn(entry.data) : null;
+    if (extra) out.push({ key: null, label: null, suggest: null, message: extra });
+    return out;
+  }
+
+  // ---------- who has and hasn't reported ----------
+  // For every table with `expect`, one line per reporter (each hall, or the one division)
+  // and one cell per day or week of the window: was something entered? The day or week in
+  // progress is shown but not counted as missed — it is not over yet.
+  //
+  // expect: {}                          one entry per period, from whoever enters the table
+  // expect: { per: 'hall' }             one per period for every choice of that field
+  // expect: { per: 'plant', activeOnly } the same, but only choices that have ever been
+  //                                      entered; the others are listed as never reported
+  function coverage({ rows, today, days }) {
+    const end = utc(today);
+    const dates = [];
+    for (let i = days - 1; i >= 0; i--) dates.push(isoDate(addDays(end, -i)));
+    const weeks = [...new Set(dates.map(isoWeekOf))];
+    const groups = [];
+    for (const [id, t] of Object.entries(tables)) {
+      if (!t.expect) continue;
+      const slots = t.period === 'week' ? weeks : dates;
+      const open = t.period === 'week' ? isoWeekOf(today) : today;
+      const tRows = rows[id] || [];
+      const per = t.expect.per || null;
+      const field = per && t.fields.find(f => f.key === per);
+      let names = per ? field.options : [null];
+      let never = [];
+      if (per && t.expect.activeOnly) {
+        const seen = new Set(tRows.map(r => r.data[per]));
+        never = names.filter(n => !seen.has(n));
+        names = names.filter(n => seen.has(n));
+      }
+      const lines = names.map(name => {
+        const mine = per ? tRows.filter(r => r.data[per] === name) : tRows;
+        const have = new Set(mine.map(r => r.period));
+        const last = mine.reduce((m, r) => (r.period > m ? r.period : m), '');
+        const cells = slots.map(s => (have.has(s) ? 'ok' : s === open ? 'open' : 'miss'));
+        return { name, last: last || null, cells, missed: cells.filter(c => c === 'miss').length,
+          doneNow: have.has(open) };
+      });
+      groups.push({ table: id, title: t.title, period: t.period, per: field ? field.label : null,
+        slots, open, lines, never });
+    }
+    return groups;
+  }
+
   // ---------- navigation: major categories > subsections > tables ----------
   const categories = [
     {
@@ -747,6 +855,7 @@
     {
       id: 'administration', title: 'Administration',
       sections: [
+        { id: 'missing', title: 'Missing entries', coverage: true, adminOnly: true, tables: [] },
         { id: 'activity', title: 'Recent entries', recent: true, adminOnly: true, tables: [] },
         { id: 'pages', title: 'Public page wording', pages: true, adminOnly: true, tables: [] },
       ],
@@ -754,7 +863,7 @@
   ];
 
   const SDSI = {
-    tables, categories, overviews, publicView, annualCandidates,
+    tables, categories, overviews, publicView, annualCandidates, checkEntry, coverage,
     lists: { HALLS, PLANTS, MATERIALS, FACILITIES },
     helpers: { num, add, fmt, tons, fyOfMonth, periodRange, inRange, isDated, formatDate, formatPeriod, monthOf,
       isoWeekOf, monthOfWeek, weekStart },
