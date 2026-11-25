@@ -1,9 +1,5 @@
 # BTP 1: SDSI Data Entry Portal
 
-> **Picking this project up?** Read **[HANDOVER.md](HANDOVER.md)** first — where it runs,
-> how to deploy, what is still open, and the traps that have already cost time.
-> Then [DEPLOY.md](DEPLOY.md) for the server.
-
 A website for entering and reporting IIT Kharagpur sustainability (SDSI) data. It covers
 **solid waste** and **sewage treatment**, following the tables published on the
 [SDSI pages](https://www.iitkgp.ac.in/navpage/sdsi).
@@ -176,8 +172,8 @@ point — keep the machine itself locked.
 
 ### What the sign-in does and doesn't allow
 
-- Nothing is served before sign-in — not a page, not the menu, not `schema.js`. Every address
-  lands on the sign-in page until there is a session.
+- The sustainability pages and public figures are available without signing in. Staff forms,
+  individual records and account management require an authorised session.
 - Passwords are stored as salted scrypt hashes, never as text.
 - Five wrong passwords in a row lock that username for five minutes.
 - A session dies after **12 hours without use** and when the browser closes, so a machine left
@@ -229,6 +225,9 @@ In Windows PowerShell that is `$env:HOST="127.0.0.1"; node server.js`. Behind an
 A laptop is not a host: close the lid and the site is gone. **[DEPLOY.md](DEPLOY.md)** has
 step-by-step instructions for AlwaysData, a plain Linux server and Docker.
 
+To update the existing AlwaysData site, run `cd ~/BTP-1 && git pull --ff-only` on
+the host, then restart the Node site in the AlwaysData panel.
+
 Two things are needed wherever it goes — **Node 22.13+**, and a disk that survives restarts
 with `DATA_DIR` pointing at it:
 
@@ -246,6 +245,12 @@ entries as future-dated.
 `/healthz` returns `{"ok":true,...}` for uptime checks.
 
 ### About the data
+
+Administrators can publish one waste figure for a completed financial year from
+the monthly waste summary. The public table keeps the published value until an
+administrator publishes a revision. It shows total solid waste once both dry
+and wet waste have been published for that year. The publisher excludes demo
+entries and years already available in the Institute's historical series.
 
 - On the first start the site creates `sdsi.db` in the data folder and loads the published list of treatment plants.
 - The database isn't uploaded to GitHub. Keep a copy of `sdsi.db` if you enter data you care about.
@@ -278,7 +283,6 @@ entries as future-dated.
 - `paths.js`: where the database lives. Honours `DATA_DIR`; every tool agrees through this file.
 - `backup.js`: a dated copy of the database, keeping the most recent. Safe to run while the site is up.
 - `DEPLOY.md`, `Dockerfile`: putting it on a server.
-- `docs/`: the column specification taken from the SDSI site tables.
 
 ## Adding a hall or a plant
 

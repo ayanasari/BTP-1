@@ -582,12 +582,50 @@
   // breakdown, no account name and no date finer than a financial year ever leaves the
   // building through it — which is the whole reason the rollup is not done in the browser
   // the way the administrator's summary is.
+  // Each approved cell is a snapshot. Subsequent edits to daily entries stay private
+  // until an administrator publishes the revised figure.
+  function annualCandidates(entries, today) {
+    const definitions = {
+      mess_waste: ['wet', 'Wet waste', 'food_kg'],
+      dry_waste: ['dry', 'Dry waste', 'dry_kg'],
+      horticulture_waste: ['horticulture', 'Horticulture waste', 'total_kg'],
+      recyclables_sold: ['recycled', 'Dry waste recycled', 'qty_kg'],
+      waste_processed: ['processed', 'Bio/food waste processed', 'input_kg'],
+      ewaste_disposal: ['ewaste', 'Electronic waste', 'qty_kg'],
+    };
+    const cells = new Map();
+    for (const row of entries) {
+      const definition = definitions[row.table_id];
+      if (!definition || !row.period) continue;
+      const fy = fyOfMonth(monthOf(row));
+      if (fy >= fyOfMonth(today.slice(0, 7)) || PUBLISHED_WASTE.some(p => p.fy === fy)) continue;
+      const [field, label, key] = definition;
+      const value = num(field === 'horticulture' ? tables.horticulture_waste.calc(row)[key] : row.data[key]);
+      if (value == null) continue;
+      const id = fy + ':' + field;
+      const cell = cells.get(id) || { fy, field, label, kg: 0, count: 0 };
+      cell.kg += value;
+      cell.count++;
+      cells.set(id, cell);
+    }
+    return [...cells.values()].map(({ kg, ...cell }) => ({
+      ...cell, value: cell.field === 'ewaste' ? kg : tons(kg), unit: cell.field === 'ewaste' ? 'kg' : 't',
+    })).sort((a, b) => b.fy.localeCompare(a.fy) || a.label.localeCompare(b.label));
+  }
+
   function publicView(ctx) {
     const waste = ['mess_waste', 'dry_waste', 'horticulture_waste', 'waste_processed',
       'recyclables_sold', 'ewaste_disposal'];
     const rowsOf = id => ctx.rows[id] || [];
     // Use institute-published reporting years across the public headline, chart and table.
-    const byYear = [...PUBLISHED_WASTE].sort((a, b) => b.fy.localeCompare(a.fy));
+    const newYears = new Map();
+    for (const { fy, field, value } of ctx.annualCells || []) {
+      const year = newYears.get(fy) || { fy };
+      year[field] = value;
+      year.total = year.dry != null && year.wet != null ? year.dry + year.wet : null;
+      newYears.set(fy, year);
+    }
+    const byYear = [...PUBLISHED_WASTE, ...newYears.values()].sort((a, b) => b.fy.localeCompare(a.fy));
     // Column order follows the institute's own published table.
     const wasteTable = {
       // Short headings so all eight columns fit a laptop without sideways scrolling;
@@ -599,7 +637,7 @@
         fmt(y.wet, 2), fmt(y.recycled, 2), fmt(y.processed, 2), fmt(y.ewaste, 0)]),
     };
 
-    const head = byYear.find(y => num(y.total) > 0) || byYear[0];
+    const head = byYear.find(y => y.total != null) || byYear[0];
 
     // Oldest first, because a chart reads left to right through time.
     const chron = [...byYear].reverse();
@@ -716,7 +754,7 @@
   ];
 
   const SDSI = {
-    tables, categories, overviews, publicView,
+    tables, categories, overviews, publicView, annualCandidates,
     lists: { HALLS, PLANTS, MATERIALS, FACILITIES },
     helpers: { num, add, fmt, tons, fyOfMonth, periodRange, inRange, isDated, formatDate, formatPeriod, monthOf,
       isoWeekOf, monthOfWeek, weekStart },

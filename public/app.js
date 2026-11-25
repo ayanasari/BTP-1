@@ -223,6 +223,12 @@
           ${miniTable(o.extra)}
         </section>` : ''}`;
 
+    if (me.isAdmin) {
+      const panel = document.createElement('section');
+      panel.className = 'card';
+      $main.append(panel);
+      drawAnnualPublisher(panel);
+    }
     // The summary has no date range to pick: it is every entry, added up.
     document.getElementById('overviewPdf').addEventListener('click', () => {
       try {
@@ -233,6 +239,38 @@
         toast('Could not create the PDF');
       }
     });
+  }
+
+  async function drawAnnualPublisher(panel) {
+    panel.innerHTML = '<div class="card-head"><h2>Publish annual waste figures</h2></div>';
+    const status = document.createElement('p');
+    status.className = 'card-note';
+    status.setAttribute('role', 'status');
+    panel.append(status);
+    try {
+      const { cells } = await api('GET', '/api/annual-waste');
+      if (!cells.length) {
+        status.textContent = 'No new completed financial year has recorded waste figures available to publish.';
+        return;
+      }
+      const form = document.createElement('form');
+      form.className = 'head-actions';
+      form.innerHTML = '<label>Annual figure <select></select></label><button class="btn btn-primary">Publish figure</button>';
+      const select = form.querySelector('select');
+      cells.forEach((c, i) => select.add(new Option(`${c.fy} · ${c.label} · ${c.value} ${c.unit} (${c.count} entries)`, i)));
+      panel.append(form);
+      form.onsubmit = async event => {
+        event.preventDefault();
+        const c = cells[select.value];
+        const button = form.querySelector('button');
+        button.disabled = true;
+        try {
+          await api('POST', '/api/annual-waste', { fy: c.fy, field: c.field, value: c.value });
+          status.textContent = `Published ${c.label} for ${c.fy}: ${c.value} ${c.unit}.`;
+        } catch (err) { status.textContent = err.message; }
+        finally { button.disabled = false; }
+      };
+    } catch (err) { status.textContent = err.message; }
   }
 
   // ---------- report panel ----------

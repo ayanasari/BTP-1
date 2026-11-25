@@ -44,6 +44,11 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_entries_table ON entries(table_id);
   CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
+  CREATE TABLE IF NOT EXISTS annual_waste (
+    fy TEXT NOT NULL, field TEXT NOT NULL, value REAL NOT NULL,
+    published_by TEXT NOT NULL, published_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (fy, field)
+  );
   -- The wording on the public page. One record per topic, edited by the administrator
   -- from the site rather than by changing code. body is plain text; a blank line starts
   -- a new paragraph. The topics themselves are fixed in public/topics.js.
@@ -328,7 +333,8 @@ async function handleApi(req, res, url, user, token) {
     for (const r of db.prepare(`SELECT table_id, period, data FROM entries WHERE table_id IN (${marks}) AND COALESCE(created_by, '') != 'demo'`).all(...known)) {
       rows[r.table_id].push({ period: r.period, data: JSON.parse(r.data) });
     }
-    const view = SDSI.publicView({ rows, today: localToday() });
+    const annualCells = db.prepare('SELECT fy, field, value FROM annual_waste').all();
+    const view = SDSI.publicView({ rows, annualCells, today: localToday() });
 
 
 
@@ -513,6 +519,21 @@ async function handleApi(req, res, url, user, token) {
   // Until a handed-out password has been replaced, the account can do nothing else.
   if (user.mustChange) {
     throw new HttpError(403, 'Choose your own password before entering any data.');
+  }
+
+  if (p === '/api/annual-waste') {
+    if (!users.isAdmin(user)) throw new HttpError(403, 'Administrators only.');
+    const body = req.method === 'POST' ? await readBody(req) : null;
+    const rows = db.prepare("SELECT table_id, period, data FROM entries WHERE period IS NOT NULL AND COALESCE(created_by, '') != 'demo'").all();
+    const cells = SDSI.annualCandidates(rows.map(r => ({ ...r, data: JSON.parse(r.data) })), localToday());
+    if (req.method === 'GET') return sendJson(res, 200, { cells });
+    if (req.method !== 'POST') throw new HttpError(405, 'Method not allowed.');
+    const cell = cells.find(c => c.fy === body?.fy && c.field === body?.field);
+    if (!cell || cell.value !== body.value) throw new HttpError(409, 'The figure has changed. Reopen the monthly summary to review it.');
+    db.prepare(`INSERT INTO annual_waste (fy, field, value, published_by) VALUES (?, ?, ?, ?)
+      ON CONFLICT(fy, field) DO UPDATE SET value=excluded.value, published_by=excluded.published_by, published_at=CURRENT_TIMESTAMP`)
+      .run(cell.fy, cell.field, cell.value, user.username);
+    return sendJson(res, 200, { ok: true });
   }
 
   if (p === '/api/users') {
